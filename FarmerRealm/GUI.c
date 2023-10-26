@@ -66,11 +66,11 @@ void CreateCraftPanel(SDL_Renderer* renderer,char const title[], Vector2 windowS
     CreateText(title, (Color){80,52,30}, (Vector2){150,50}, titlePos, renderer, Font, &panel -> children[panel -> childCount]);
     panel -> childCount++;
 
-    CreateText("--Empty--", (Color){128,128,128}, (Vector2){70,20}, (Vector2){360,307}, renderer, Font, &panel -> children[panel -> childCount]);
+    CreateText("--Empty--", (Color){128,128,128}, (Vector2){70,20}, (Vector2){panelPosition.x+60,panelPosition.y+108}, renderer, Font, &panel -> children[panel -> childCount]);
     panel -> childCount++;
-    CreateText("--Empty--", (Color){128,128,128}, (Vector2){70,20}, (Vector2){360,377}, renderer, Font, &panel -> children[panel -> childCount]);
+    CreateText("--Empty--", (Color){128,128,128}, (Vector2){70,20}, (Vector2){panelPosition.x+60,panelPosition.y+178}, renderer, Font, &panel -> children[panel -> childCount]);
     panel -> childCount++;
-    CreateText("--Empty--", (Color){128,128,128}, (Vector2){70,20}, (Vector2){360,447}, renderer, Font, &panel -> children[panel -> childCount]);
+    CreateText("--Empty--", (Color){128,128,128}, (Vector2){70,20}, (Vector2){panelPosition.x+60,panelPosition.y+248}, renderer, Font, &panel -> children[panel -> childCount]);
     panel -> childCount++;
 }
 
@@ -81,4 +81,75 @@ int GetTextLength(char text[])
     for(i; text[i] != '\0'; i++);
 
     return i;
+}
+
+void ShowAnimatedGUI(SDL_Renderer* renderer, GUI_Panel *panel, int PanelSpeed, int windowSizeY)
+{
+    if(panel -> visible && panel -> panelImage.destination.y == windowSizeY-panel -> panelImage.destination.h)
+    {
+        RenderParent(renderer, *panel);
+    }
+    else if(!panel -> visible && panel -> panelImage.destination.y < windowSizeY)
+    {
+        panel -> panelImage.destination.y += PanelSpeed;
+
+        for(int i = 0; i<panel -> childCount; i++)
+        {
+            panel -> children[i].destination.y += PanelSpeed;
+        }
+
+        RenderParent(renderer, *panel);
+    }
+    else if(panel -> visible && panel -> panelImage.destination.y >= windowSizeY-panel -> panelImage.destination.h)
+    {
+        panel -> panelImage.destination.y -= PanelSpeed;
+
+        for(int i = 0; i<panel -> childCount; i++)
+        {
+            panel -> children[i].destination.y -= PanelSpeed;
+        }
+        RenderParent(renderer, *panel);
+    }
+}
+
+void CheckShopItems(GUI_Panel *parent, ShopItem *items, int childcount ,int money, int level)
+{
+    for(int i = 5; i<parent -> childCount && parent -> visible; i+=childcount)
+    {
+        unsigned short int index = (i-5)/childcount;
+        if(money >= items[index].price && level >= items[index].level)
+        {
+            SDL_SetTextureColorMod(parent -> children[i+1].texture,100,255,100); //Ár
+            SDL_SetTextureColorMod(parent -> children[i+2].texture,255,255,255); //Szint
+            SDL_SetTextureColorMod(parent -> children[i-3].texture,255,255,255); //Háttér
+
+            SDL_SetTextureAlphaMod(parent -> children[i-1].texture, 0);
+        }
+        else if(level < items[index].level)
+        {
+            SDL_SetTextureColorMod(parent -> children[i].texture,220,220,220);
+            SDL_SetTextureColorMod(parent -> children[i+2].texture,220,100,100);
+            SDL_SetTextureColorMod(parent -> children[i-3].texture,220,220,220);
+
+            SDL_SetTextureAlphaMod(parent -> children[i-1].texture, 255);
+        }
+        else
+        {
+            SDL_SetTextureColorMod(parent -> children[i+1].texture,255,100,100);
+            SDL_SetTextureColorMod(parent -> children[i+2].texture,255,255,255);
+            SDL_SetTextureColorMod(parent -> children[i-3].texture,255,220,220);
+
+            SDL_SetTextureAlphaMod(parent -> children[i-1].texture, 0);
+        }
+    }
+}
+
+
+void FormatTime(int t, char *out)
+{
+    int hour = t/1000/60/60;
+    int minute = (t/1000/60)-(hour*60);
+    int sec = (t/1000)-(hour*60*60)-(minute*60);
+
+    sprintf(out, "%02d:%02d:%02d", hour,minute,sec);
 }

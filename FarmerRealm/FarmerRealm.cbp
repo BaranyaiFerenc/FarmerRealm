@@ -46,6 +46,25 @@
 			<Add library="dxguid" />
 			<Add directory="$(#sdl2.lib)" />
 		</Linker>
+		<Unit filename="Filemanager.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="Filemanager.h" />
+		<Unit filename="GUI.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="GUI.h" />
+		<Unit filename="Graphics.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="Graphics.h" />
+		<Unit filename="Inventory.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="Inventory.h" />
+		<Unit filename="main.c">
+			<Option compilerVar="CC" />
+		</Unit>
 		<Extensions>
 			<lib_finder disable_auto="1" />
 		</Extensions>

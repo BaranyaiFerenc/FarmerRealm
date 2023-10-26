@@ -1,5 +1,5 @@
 # depslib dependency file v1.0
-1696971099 source:c:\users\baranyai ferenc\desktop\susu\proggyak\farmerrealm\graphics.c
+1698168711 source:c:\users\baranyai ferenc\desktop\susu\proggyak\farmerrealm\graphics.c
 	"Graphics.h"
 
 1697314145 c:\users\baranyai ferenc\desktop\susu\proggyak\farmerrealm\graphics.h
@@ -381,10 +381,10 @@
 	"begin_code.h"
 	"close_code.h"
 
-1697311248 source:c:\users\baranyai ferenc\desktop\susu\proggyak\farmerrealm\gui.c
+1697570638 source:c:\users\baranyai ferenc\desktop\susu\proggyak\farmerrealm\gui.c
 	"GUI.h"
 
-1697311632 c:\users\baranyai ferenc\desktop\susu\proggyak\farmerrealm\gui.h
+1697570663 c:\users\baranyai ferenc\desktop\susu\proggyak\farmerrealm\gui.h
 	<stdbool.h>
 	<stdlib.h>
 	<stdio.h>
@@ -396,7 +396,7 @@
 	<stdbool.h>
 	"Graphics.h"
 
-1697364182 source:c:\users\baranyai ferenc\desktop\susu\proggyak\farmerrealm\main.c
+1698310818 source:c:\users\baranyai ferenc\desktop\susu\proggyak\farmerrealm\main.c
 	<SDL2_gfxPrimitives.h>
 	<SDL_ttf.h>
 	<SDL_image.h>
@@ -404,6 +404,22 @@
 	<stdlib.h>
 	<stdbool.h>
 	<string.h>
+	<time.h>
 	"GUI.h"
 	"Graphics.h"
+	"Filemanager.h"
+	"Inventory.h"
+
+1698224450 c:\users\baranyai ferenc\desktop\susu\proggyak\farmerrealm\filemanager.h
+	<stdio.h>
+	<stdlib.h>
+	<string.h>
+
+1698308221 source:c:\users\baranyai ferenc\desktop\susu\proggyak\farmerrealm\filemanager.c
+	"Filemanager.h"
+
+1697479720 source:c:\users\baranyai ferenc\desktop\susu\proggyak\farmerrealm\inventory.c
+	"Inventory.h"
+
+1697493324 c:\users\baranyai ferenc\desktop\susu\proggyak\farmerrealm\inventory.h
 
