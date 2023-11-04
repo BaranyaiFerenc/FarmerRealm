@@ -1,17 +1,19 @@
 #include "GUI.h"
 
-void CreateText(char const text[], Color color, Vector2 sizeOfText, Vector2 position, SDL_Renderer* renderer, TTF_Font *font, Image *img)
-{
-    int length = GetTextLength(text);
-    SDL_Surface* surface = TTF_RenderText_Blended_Wrapped(font, text, (SDL_Color){color.r,color.g,color.b}, sizeOfText.y*length);
 
+#define gPanelSpeed 30
+
+void CreateText(char text[], Color color, int sizeOfText, Vector2 position, SDL_Renderer* renderer, TTF_Font *font, Image *img)
+{
+    int length = strlen(text);
+    SDL_Surface* surface = TTF_RenderText_Blended_Wrapped(font, text, (SDL_Color){color.r,color.g,color.b}, length*sizeOfText);
 
     img -> texture = SDL_CreateTextureFromSurface(renderer, surface);
 
     SDL_FreeSurface(surface);
 
-    img -> destination.w = sizeOfText.x;
-    img -> destination.h = sizeOfText.y;
+    img -> destination.w = (sizeOfText/2)*length;
+    img -> destination.h = sizeOfText;
 
     img -> destination.x = position.x;
     img -> destination.y = position.y;
@@ -48,7 +50,7 @@ bool OverUI(Vector2 mousePos, SDL_Rect obj)
     return (mousePos.x > obj.x && mousePos.x < obj.x+obj.w) && (mousePos.y > obj.y && mousePos.y < obj.y+obj.h);
 }
 
-void CreateCraftPanel(SDL_Renderer* renderer,char const title[], Vector2 windowSize, GUI_Panel *panel)
+void CreateCraftPanel(SDL_Renderer* renderer,char *title, Vector2 windowSize, GUI_Panel *panel)
 {
     TTF_Font *Font = TTF_OpenFont("system.fon", 30);
     Vector2 panelPosition = (Vector2){windowSize.x/2-200,windowSize.y/2-150};
@@ -63,27 +65,18 @@ void CreateCraftPanel(SDL_Renderer* renderer,char const title[], Vector2 windowS
     titlePos.x = titlePos.x+30;
     titlePos.y = titlePos.y+15;
 
-    CreateText(title, (Color){80,52,30}, (Vector2){150,50}, titlePos, renderer, Font, &panel -> children[panel -> childCount]);
+    CreateText(title, (Color){80,52,30}, 50, titlePos, renderer, Font, &panel -> children[panel -> childCount]);
     panel -> childCount++;
 
-    CreateText("--Empty--", (Color){128,128,128}, (Vector2){70,20}, (Vector2){panelPosition.x+60,panelPosition.y+108}, renderer, Font, &panel -> children[panel -> childCount]);
+    CreateText("--Empty--", (Color){128,128,128}, 20, (Vector2){panelPosition.x+60,panelPosition.y+108}, renderer, Font, &panel -> children[panel -> childCount]);
     panel -> childCount++;
-    CreateText("--Empty--", (Color){128,128,128}, (Vector2){70,20}, (Vector2){panelPosition.x+60,panelPosition.y+178}, renderer, Font, &panel -> children[panel -> childCount]);
+    CreateText("--Empty--", (Color){128,128,128}, 20, (Vector2){panelPosition.x+60,panelPosition.y+178}, renderer, Font, &panel -> children[panel -> childCount]);
     panel -> childCount++;
-    CreateText("--Empty--", (Color){128,128,128}, (Vector2){70,20}, (Vector2){panelPosition.x+60,panelPosition.y+248}, renderer, Font, &panel -> children[panel -> childCount]);
+    CreateText("--Empty--", (Color){128,128,128}, 20, (Vector2){panelPosition.x+60,panelPosition.y+248}, renderer, Font, &panel -> children[panel -> childCount]);
     panel -> childCount++;
 }
 
-int GetTextLength(char text[])
-{
-    int i = 0;
-
-    for(i; text[i] != '\0'; i++);
-
-    return i;
-}
-
-void ShowAnimatedGUI(SDL_Renderer* renderer, GUI_Panel *panel, int PanelSpeed, int windowSizeY)
+void ShowAnimatedGUI(SDL_Renderer* renderer, GUI_Panel *panel, int windowSizeY)
 {
     if(panel -> visible && panel -> panelImage.destination.y == windowSizeY-panel -> panelImage.destination.h)
     {
@@ -91,22 +84,22 @@ void ShowAnimatedGUI(SDL_Renderer* renderer, GUI_Panel *panel, int PanelSpeed, i
     }
     else if(!panel -> visible && panel -> panelImage.destination.y < windowSizeY)
     {
-        panel -> panelImage.destination.y += PanelSpeed;
+        panel -> panelImage.destination.y += gPanelSpeed;
 
         for(int i = 0; i<panel -> childCount; i++)
         {
-            panel -> children[i].destination.y += PanelSpeed;
+            panel -> children[i].destination.y += gPanelSpeed;
         }
 
         RenderParent(renderer, *panel);
     }
     else if(panel -> visible && panel -> panelImage.destination.y >= windowSizeY-panel -> panelImage.destination.h)
     {
-        panel -> panelImage.destination.y -= PanelSpeed;
+        panel -> panelImage.destination.y -= gPanelSpeed;
 
         for(int i = 0; i<panel -> childCount; i++)
         {
-            panel -> children[i].destination.y -= PanelSpeed;
+            panel -> children[i].destination.y -= gPanelSpeed;
         }
         RenderParent(renderer, *panel);
     }
@@ -152,4 +145,14 @@ void FormatTime(int t, char *out)
     int sec = (t/1000)-(hour*60*60)-(minute*60);
 
     sprintf(out, "%02d:%02d:%02d", hour,minute,sec);
+}
+
+void RenderCanvas(Canvas *canvas, SDL_Renderer *renderer)
+{
+    SDL_RenderCopy(renderer, canvas->infoBox.texture, NULL, &canvas->infoBox.destination);
+    SDL_RenderCopy(renderer, canvas->moneyText.texture, NULL, &canvas->moneyText.destination);
+    SDL_RenderCopy(renderer, canvas->levelText.texture, NULL, &canvas->levelText.destination);
+
+    SDL_RenderCopy(renderer, canvas->buildButton.texture, NULL, &canvas->buildButton.destination);
+    SDL_RenderCopy(renderer, canvas->plantButton.texture, NULL, &canvas->plantButton.destination);
 }

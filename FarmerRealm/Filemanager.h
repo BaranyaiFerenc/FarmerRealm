@@ -12,4 +12,6 @@ void GetSave(char path[], unsigned long long int *save);
 void SetSave(unsigned short int id, unsigned char type, unsigned long long misc);
 
 unsigned long long int GetBinary(unsigned short int id, unsigned char type, unsigned long long misc);
+
+void SaveStats(unsigned int level,unsigned int money, unsigned long time);
 #endif

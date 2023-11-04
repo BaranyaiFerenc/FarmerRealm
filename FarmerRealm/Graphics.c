@@ -28,14 +28,13 @@ void CreateWindow(char const *text, int width, int height, SDL_Window **pwindow,
     *prenderer = renderer;
 }
 
-void CreateImage(SDL_Renderer* renderer, char const path[], Vector2 positionToPlace, Vector2 size, Image *img)
+void CreateImage(SDL_Renderer* renderer, char *path, Vector2 positionToPlace, Vector2 size, Image *img)
 {
+    //printf("Create image: %s\n",path);
     SDL_Surface* surface = IMG_Load(path);
     img -> texture = SDL_CreateTextureFromSurface(renderer, surface);
 
     SDL_FreeSurface(surface);
-
-    SDL_QueryTexture(img -> texture, NULL, NULL, &img -> destination.w, &img -> destination.h);
 
     img -> destination.w = size.x;
     img -> destination.h = size.y;

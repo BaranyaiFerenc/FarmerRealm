@@ -33,7 +33,7 @@ typedef enum ImageType {game, gui} ImageType;
 void CreateWindow(char const *text, int width, int height, SDL_Window **pwindow, SDL_Renderer **prenderer);
 
 /*Képek létrehozása*/
-void CreateImage(SDL_Renderer* renderer, char const path[], Vector2 positionToPlace, Vector2 size, Image *img);
+void CreateImage(SDL_Renderer* renderer,  char *path, Vector2 positionToPlace, Vector2 size, Image *img);
 
 bool MouseOverImage(SDL_Rect img, Vector2 mousePos, int sizeOfBase);
 int UpperY(int x,int sizeOfBase);

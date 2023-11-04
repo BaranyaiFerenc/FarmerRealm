@@ -11,34 +11,13 @@
 #include "GUI.h"
 #include "Graphics.h"
 #include "Filemanager.h"
-#include "Inventory.h"
+#include "ProcessHandler.h"
+#include "GameElements.h"
 
-#define TICK 30
+#define d_windowSizeX 1100
+#define d_windowSizeY 750
+#define d_baseSize 200
 
-
-typedef struct Tile //Alap csempe struktúra ezekre épül a játék
-{
-    unsigned short int id;
-    char name[20];
-    Vector2 positionToMouse; //A csempe pozíciója relatív az egérhez, ez kell hogy mozgatásnál ne ugorjon oda az egérhez hanem tartsa a relatív helyzetet
-    Vector2 coordinates;
-    Image img;
-} Tile;
-
-typedef struct Button
-{
-    Image img;
-} Button;
-
-
-typedef struct Process
-{
-    int tileID;
-    double time;
-
-    char path[100];
-    int misc;
-} Process;
 
 typedef struct Crafter
 {
@@ -49,54 +28,45 @@ typedef struct Crafter
     Process ActiveProcess[3];
 } Crafter;
 
+typedef struct Item
+{
+    char Name[100];
+    unsigned int Price;
+    unsigned int Amount;
+} Item;
+
 
 //Irányítás
 void OnLeftMouseDown(SDL_Event e);
-void OnRightMouseDown(SDL_Event e);
-void OnLeftMouseUp(SDL_Event e);
-void OnRightMouseUp(SDL_Event e);
+void OnLeftMouseUp(SDL_Event e,Canvas *canvas, Item *AllItem, int ItemCount);
 void OnMouseMove(SDL_Event e);
 
-bool LeftMouseDown;
+//Színek beállítása
+void ClearColors();
+void SetBuildColors();
+void SetPlantColors();
 
-int mapSize = 2500;
-Tile tiles[2500];
-Vector2 origin = {-300,1800};
-
-Button buttons[2];
-int buttonCount = 0;
-
-//Épületek
-Vector2 millPosition ={21,19};
-Vector2 bakeryPosition ={18,21};
-Vector2 breweryPosition ={18,19};
-Vector2 shopPosition ={20,22};
-Vector2 warehousePosition ={23,22};
-
-//Mértékek
-int windowSizeX = 1100;
-int windowSizeY = 750;
-int baseSize = 200;
-
-SDL_Window *window;
-SDL_Renderer *renderer;
-
-Crafter crafters[3];
-
-GUI_Panel buildPanel;
-GUI_Panel plantPanel;
-Image buildButton;
-Image plantButton;
-
-int PanelSpeed = 30;
-
+//Panelek bezárása
 void CloseBuildPanel();
 void ClosePlantPanel();
 
-Image guis[50];
+ShopItem* GetShopItemById(int id, int n, ShopItem *itemList);
+int GetPlantImageId(ShopItem *plant, unsigned long long int TimeWhenDone);
+Item* GetItemByName(char *name, int n, Item *itemList);
 
+//Ablak és a renderer
+SDL_Window *window;
+SDL_Renderer *renderer;
+
+//Fontos adatok
 int money = 10000;
 int level = 1;
+unsigned timer;
+
+int mapSize = 2500;
+Tile tiles[2500];
+
+Crafter crafters[3];
 
 bool BuildMode = false;
 int actualBuildItem = 0;
@@ -105,7 +75,7 @@ unsigned short int BuildChildCount = 6;
 unsigned short int BuildItemCount = 3;
 Image BuildLockImages[3];
 
-char Undestroyables[15][7] = {"Windmill","Bakery","Brewery","Shop","Warehouse","Ground",""};
+char *Undestroyables[20] = {"Windmill","Bakery","Brewery","Shop","Warehouse","Ground",""};
 
 bool PlantMode = false;
 int actualPlantItem = 0;
@@ -114,106 +84,57 @@ unsigned short int PlantChildCount = 6;
 unsigned short int PlantItemCount = 4;
 Image PlantLockImages[3];
 
-Process BuildProcesses[100];
-Process PlantProcesses[100];
-Process CraftProcesses[9];
+Tile *LastTile;
+Vector2 lastMousePos;
 
-void AddProcess(int id,unsigned char type, int t, char path[], int m);
+ProcessList plist = {NULL,0};
+
+//TileMatrix matrix;
+
+Vector2 origin = {-300,1800};
+Vector2 moneyPos;
 
 TTF_Font *font;
 
 
-Image moneyText;
-Image levelText;
-Image timeText;
-Vector2 moneyPos;
+    GUI_Panel buildPanel,plantPanel;
+    Image buildButton,plantButton,infoBox,moneyText,levelText;
 
-
-Image moneyBox;
-
-Image timeBox;
-
-Image guiElements[100];
-
-void ClearColors();
-void SetBuildColors();
-void SetPlantColors();
-
-
-Tile *LastTile;
-Vector2 lastMousePos;
-
-
-Slot inventory[InventorySize];
-Item AllItem[InventorySize];
-
-unsigned timer;
-unsigned plusTime;
-
-void Init_Parameters()
-{
-    //Betűkészlet betöltése
-    TTF_Init();
-    font = TTF_OpenFont("system.fon", 20);
-
-    //Inventory
-    AllItem[0] = (Item){.Name = "Wheat", .IconPath = "Images/Icon/Wheat.png", .Price = 200};
-    AllItem[1] = (Item){.Name = "Corn", .IconPath = "Images/Icon/Corn.png", .Price = 200};
-    AllItem[2] = (Item){.Name = "Tomato", .IconPath = "Images/Icon/Tomato.png", .Price = 200};
-    AllItem[3] = (Item){.Name = "Potato", .IconPath = "Images/Icon/Potato.png", .Price = 200};
-
-    //Az építhető épületek deklarálása
-    Buildings[0] = (ShopItem){"Field",100,1,10,21};
-    Buildings[1] = (ShopItem){"Beehive",1000,5,60,22};
-    Buildings[2] = (ShopItem){"Greenhouse",5000,10,300,23};
-    Buildings[3] = (ShopItem){"Ground",100,1,60,10}; //Megsemmisítés gombhoz
-    Buildings[4] = (ShopItem){"ConstructionSite",0,1,60,1}; //Építés alatt álló épületek
-
-    //Ültethető növények deklarálása
-    Plants[0] = (ShopItem){"Wheat",1,1,30,101};
-    Plants[1] = (ShopItem){"Potato",2,2,60,102};
-    Plants[2] = (ShopItem){"Corn",5,3,120,103};
-    Plants[3] = (ShopItem){"Tomato",10,5,240,104};
-
-    //A "barkács" épületek deklarálása
-    crafters[0] = (Crafter){"Windmill"};
-    crafters[1] = (Crafter){"Brewery"};
-    crafters[2] = (Crafter){"Bakery"};
-
-    //Ablak léterhozása
-    CreateWindow("FarmerRealm", windowSizeX, windowSizeY, &window, &renderer);
-
-    for(int i = 0; i<100;i++)
-        BuildProcesses[i].tileID = -1;
-
-    LastTile = &tiles[0];
-}
-
-void Init_Map()
+void Init_Map(Vector2 origin)
 {
     FILE *file;
 
     file = fopen("save.bin", "r");
     int rowSize = sqrt(mapSize);
+
+    //Épületek
+    Vector2 millPosition ={21,19};
+    Vector2 bakeryPosition ={18,21};
+    Vector2 breweryPosition ={18,19};
+    Vector2 warehousePosition ={23,22};
+
     if(file != NULL)
     {
         fclose(file);
         unsigned long long int saves[2500];
 
-        GetSave("save.bin",&saves);
-        plusTime = (saves[0] << 32 >> 32)*1000;
+        GetSave("save.bin",saves);
+        level = (saves[0] >> 48);
+        timer = ((saves[0] << 32 >> 32)*1000);
         money = (saves[0] << 16 >> 48);
-        printf("Last time: %u\n",plusTime);
-        printf("Last money: %d\n",money);
+
         printf("Save found\n");
+        printf("\to Last time: %u sec\n",timer/1000);
+        printf("\to Last money: %d\n",money);
+
+        printf("\n\to Saved processes: \n");
 
         for(int x = 0; x<rowSize;x++)
         {
             for(int y = 0; y<rowSize;y++)
             {
-                char textureName[mapSize];
 
-                Vector2 delta = (Vector2){(y*baseSize/2)-x*baseSize/2,(y*baseSize/4)+x*baseSize/4};
+                Vector2 delta = (Vector2){(y*d_baseSize/2)-x*d_baseSize/2,(y*d_baseSize/4)+x*d_baseSize/4};
                 delta = (Vector2){delta.x-origin.x, delta.y-origin.y};
 
                 int index = y+x*rowSize;
@@ -221,64 +142,89 @@ void Init_Map()
 
                 if(x==millPosition.x && y==millPosition.y)
                 {
-                    CreateImage(renderer,"Images/Windmill.png",delta,(Vector2){baseSize,baseSize}, &tiles[index].img);
+                    CreateImage(renderer,"Images/Windmill.png",delta,(Vector2){d_baseSize,d_baseSize}, &tiles[index].img);
                     strcpy(tiles[index].name,"Windmill");
                     crafters[0].base = &tiles[index];
                 }
                 else if(x==bakeryPosition.x && y==bakeryPosition.y)
                 {
-                    CreateImage(renderer,"Images/Bakery.png",delta,(Vector2){baseSize,baseSize}, &tiles[index].img);
+                    CreateImage(renderer,"Images/Bakery.png",delta,(Vector2){d_baseSize,d_baseSize}, &tiles[index].img);
                     strcpy(tiles[index].name,"Bakery");
                     crafters[2].base = &tiles[index];
                 }
                 else if(x==breweryPosition.x && y==breweryPosition.y)
                 {
-                    CreateImage(renderer,"Images/Brewery.png",delta,(Vector2){baseSize,baseSize}, &tiles[index].img);
+                    CreateImage(renderer,"Images/Brewery.png",delta,(Vector2){d_baseSize,d_baseSize}, &tiles[index].img);
                     strcpy(tiles[index].name,"Brewery");
                     crafters[1].base = &tiles[index];
                 }
                 else if(x==warehousePosition.x && y==warehousePosition.y)
                 {
-                    CreateImage(renderer,"Images/Warehouse.png",delta,(Vector2){baseSize,baseSize}, &tiles[index].img);
+                    CreateImage(renderer,"Images/Warehouse.png",delta,(Vector2){d_baseSize,d_baseSize}, &tiles[index].img);
                     strcpy(tiles[index].name,"Warehouse");
                 }
                 else
                 {
                     if(type == 11)
                     {
-                        CreateImage(renderer,"Images/Tree.png",delta,(Vector2){baseSize,baseSize}, &tiles[index].img);
+                        CreateImage(renderer,"Images/Tree.png",delta,(Vector2){d_baseSize,d_baseSize}, &tiles[index].img);
                         strcpy(tiles[index].name,"Tree");
                     }
                     else if(type == 10)
                     {
-                        CreateImage(renderer,"Images/Ground.png",delta,(Vector2){baseSize,baseSize}, &tiles[index].img);
+                        CreateImage(renderer,"Images/Ground.png",delta,(Vector2){d_baseSize,d_baseSize}, &tiles[index].img);
                         strcpy(tiles[index].name,"Ground");
                     }
                     else if(type == 1)
                     {
-                        CreateImage(renderer,"Images/ConstructionSite.png",delta,(Vector2){baseSize,baseSize}, &tiles[index].img);
+                        CreateImage(renderer,"Images/ConstructionSite.png",delta,(Vector2){d_baseSize,d_baseSize}, &tiles[index].img);
                         strcpy(tiles[index].name,"ConstructionSite");
-                        unsigned long long int timeToDone = saves[index] << 20 >> 28;
+                        unsigned long long int timeToDone = (saves[index+1] << 20 >> 28);
+                        unsigned char buildingType = saves[index+1] << 56 >> 56;
 
-                        //WriteOutBin(timeToDone);
+                        printf("\t\t+ %I64u sec is when bulding with type %d is done\n", timeToDone, buildingType);
+                        Process p = {index,Building,index,timeToDone,buildingType};
+                        AddProcess(&plist, p);
+                    }
+                    else if(type == 21)
+                    {
+                        CreateImage(renderer,"Images/Field.png",delta,(Vector2){d_baseSize,d_baseSize}, &tiles[index].img);
+                        strcpy(tiles[index].name,"Field");
+                        unsigned long long int timeToDone = (saves[index+1] << 20 >> 28);
+                        unsigned char plantType = saves[index+1] << 56 >> 56;
 
-                        unsigned char buildingType = saves[index] << 56 >> 56;
+                        if(plantType != 0 && timeToDone != 0)
+                        {
+                            printf("\t\t+ %I64u sec is when plant with type %d is done\n", timeToDone, plantType);
+                            Process p = {index,Plant,index,timeToDone,plantType};
+                            AddProcess(&plist, p);
 
-                        //WriteOutBin(buildingType);
-
-                        printf("%lu sec is when bulding with type: %d is done\n", timeToDone, buildingType);
+                            ShopItem *plant = GetShopItemById(plantType, PlantItemCount, Plants);
+                            char pathToPlant[200];
+                            sprintf(pathToPlant, "Images/Plants/%s/%s4.png",plant->name,plant->name);
+                            CreateImage(renderer, pathToPlant,delta,(Vector2){d_baseSize,d_baseSize}, &tiles[index].additionalImage);
+                        }
                     }
                     else
-                    {
-                        for(int i = 0; i<BuildItemCount;i++)
+                    {   bool placed = false;
+
+                        for(int i = 0; i<BuildItemCount && !placed;i++)
                         {
-                            if(Buildings[i].BuildingID == type)
+                            if(Buildings[i].ID == type)
                             {
-                                char path[30];
-                                sprintf(&path,"Images/%s.png",Buildings[i].name);
-                                CreateImage(renderer,path,delta,(Vector2){baseSize,baseSize}, &tiles[index].img);
+                                char path[100];
+                                sprintf(path,"Images/%s.png",Buildings[i].name);
+                                CreateImage(renderer,path,delta,(Vector2){d_baseSize,d_baseSize}, &tiles[index].img);
                                 strcpy(tiles[index].name,Buildings[i].name);
+                                placed = true;
                             }
+                        }
+
+                        if(!placed)
+                        {
+                            CreateImage(renderer,"Images/Error.png",delta,(Vector2){d_baseSize,d_baseSize}, &tiles[index].img);
+                            strcpy(tiles[index].name,"Error");
+                            placed = true;
                         }
                     }
 
@@ -288,11 +234,12 @@ void Init_Map()
 
                 tiles[index].id = index;
                 tiles[index].coordinates = (Vector2){x,y};
+                //AddElementToMatrix(&matrix,tiles[index],x,y);
             }
         }
+        //printf("Matrix created with %dx%d size\n",matrix.column_size,matrix.row_size);
         return;
     }
-
 
     file = fopen("save.bin", "wb");
 
@@ -309,16 +256,15 @@ void Init_Map()
     {
         for(int y = 0; y<rowSize;y++)
         {
-            char textureName[mapSize];
 
-            Vector2 delta = (Vector2){(y*baseSize/2)-x*baseSize/2,(y*baseSize/4)+x*baseSize/4};
+            Vector2 delta = (Vector2){(y*d_baseSize/2)-x*d_baseSize/2,(y*d_baseSize/4)+x*d_baseSize/4};
             delta = (Vector2){delta.x-origin.x, delta.y-origin.y};
 
             unsigned char type = 0;
 
             if(x==millPosition.x && y==millPosition.y)
             {
-                CreateImage(renderer,"Images/Windmill.png",delta,(Vector2){baseSize,baseSize}, &tiles[y+x*rowSize].img);
+                CreateImage(renderer,"Images/Windmill.png",delta,(Vector2){d_baseSize,d_baseSize}, &tiles[y+x*rowSize].img);
                 strcpy(tiles[y+x*rowSize].name,"Windmill");
                 crafters[0].base = &tiles[y+x*rowSize];
 
@@ -326,7 +272,7 @@ void Init_Map()
             }
             else if(x==bakeryPosition.x && y==bakeryPosition.y)
             {
-                CreateImage(renderer,"Images/Bakery.png",delta,(Vector2){baseSize,baseSize}, &tiles[y+x*rowSize].img);
+                CreateImage(renderer,"Images/Bakery.png",delta,(Vector2){d_baseSize,d_baseSize}, &tiles[y+x*rowSize].img);
                 strcpy(tiles[y+x*rowSize].name,"Bakery");
                 crafters[2].base = &tiles[y+x*rowSize];
 
@@ -334,7 +280,7 @@ void Init_Map()
             }
             else if(x==breweryPosition.x && y==breweryPosition.y)
             {
-                CreateImage(renderer,"Images/Brewery.png",delta,(Vector2){baseSize,baseSize}, &tiles[y+x*rowSize].img);
+                CreateImage(renderer,"Images/Brewery.png",delta,(Vector2){d_baseSize,d_baseSize}, &tiles[y+x*rowSize].img);
                 strcpy(tiles[y+x*rowSize].name,"Brewery");
                 crafters[1].base = &tiles[y+x*rowSize];
 
@@ -342,21 +288,21 @@ void Init_Map()
             }
             else if(x==warehousePosition.x && y==warehousePosition.y)
             {
-                CreateImage(renderer,"Images/Warehouse.png",delta,(Vector2){baseSize,baseSize}, &tiles[y+x*rowSize].img);
+                CreateImage(renderer,"Images/Warehouse.png",delta,(Vector2){d_baseSize,d_baseSize}, &tiles[y+x*rowSize].img);
                 strcpy(tiles[y+x*rowSize].name,"Warehouse");
 
                 type = 0;
             }
             else if(rand()%2==0)
             {
-                CreateImage(renderer,"Images/Ground.png",delta,(Vector2){baseSize,baseSize}, &tiles[y+x*rowSize].img);
+                CreateImage(renderer,"Images/Ground.png",delta,(Vector2){d_baseSize,d_baseSize}, &tiles[y+x*rowSize].img);
                 strcpy(tiles[y+x*rowSize].name,"Ground");
 
                 type = 10;
             }
             else
             {
-                CreateImage(renderer,"Images/Tree.png",delta,(Vector2){baseSize,baseSize}, &tiles[y+x*rowSize].img);
+                CreateImage(renderer,"Images/Tree.png",delta,(Vector2){d_baseSize,d_baseSize}, &tiles[y+x*rowSize].img);
                 strcpy(tiles[y+x*rowSize].name,"Tree");
 
                 type = 11;
@@ -365,8 +311,6 @@ void Init_Map()
 
             tiles[y+x*rowSize].id = y+x*rowSize;
             tiles[y+x*rowSize].coordinates = (Vector2){x,y};
-
-            char text[30];
 
             unsigned long long int log = GetBinary(y+x*rowSize, type, 0);
 
@@ -378,107 +322,147 @@ void Init_Map()
     fclose(file);
 }
 
-void Init_GUI()
+Canvas Init_GUI()
 {
 
-    moneyPos = GetUpRightCornerPosition((Vector2){0,0},(Vector2){windowSizeX,windowSizeY},(Vector2){300,100});
+    CreateImage(renderer,"Images/GUI/MoneyBox.png",(Vector2){800,0},(Vector2){300,126}, &infoBox);
 
-    CreateImage(renderer,"Images/GUI/MoneyBox.png",moneyPos,(Vector2){300,126}, &moneyBox);
-
-    moneyPos.x = moneyPos.x+80;
-    moneyPos.y = moneyPos.y+25;
-
-    CreateImage(renderer,"Images/GUI/MoneyBox.png",(Vector2){0,0},(Vector2){300,126}, &timeBox);
-
-    CreateImage(renderer,"Images/GUI/BuildButton.png",(Vector2){windowSizeX-100, windowSizeY-100},(Vector2){100,100}, &buildButton);
-    CreateImage(renderer,"Images/GUI/PlantButton.png",(Vector2){windowSizeX-210, windowSizeY-100},(Vector2){100,100}, &plantButton);
+    CreateImage(renderer,"Images/GUI/BuildButton.png",(Vector2){d_windowSizeX-100, d_windowSizeY-100},(Vector2){100,100}, &buildButton);
+    CreateImage(renderer,"Images/GUI/PlantButton.png",(Vector2){d_windowSizeX-210, d_windowSizeY-100},(Vector2){100,100}, &plantButton);
 
     //Építő menü létrehozása
-    CreateImage(renderer,"Images/GUI/WidePanel.png",(Vector2){0, windowSizeY-220},(Vector2){windowSizeX,220}, &buildPanel.panelImage);
-    CreateImage(renderer,"Images/GUI/Exit.png",(Vector2){windowSizeX-60, windowSizeY-220},(Vector2){50,50}, &buildPanel.children[buildPanel.childCount]);
+    CreateImage(renderer,"Images/GUI/WidePanel.png",(Vector2){0, d_windowSizeY-220},(Vector2){d_windowSizeX,220}, &buildPanel.panelImage);
+    CreateImage(renderer,"Images/GUI/Exit.png",(Vector2){d_windowSizeX-60, d_windowSizeY-220},(Vector2){50,50}, &buildPanel.children[buildPanel.childCount]);
     buildPanel.childCount++;
-    CreateText("Build",(Color){80,52,30},(Vector2){150,50},(Vector2){20,windowSizeY-270},renderer,font, &buildPanel.children[buildPanel.childCount]);
+    CreateText("Build",(Color){80,52,30},50,(Vector2){20,d_windowSizeY-270},renderer,font, &buildPanel.children[buildPanel.childCount]);
     buildPanel.childCount++;
     for(int i = 0; i<BuildItemCount; i++)
     {
-        CreateImage(renderer,"Images/GUI/Item.png",(Vector2){20+i*160, windowSizeY-200},(Vector2){150,180}, &buildPanel.children[buildPanel.childCount]);
+        CreateImage(renderer,"Images/GUI/Item.png",(Vector2){20+i*160, d_windowSizeY-200},(Vector2){150,180}, &buildPanel.children[buildPanel.childCount]);
         buildPanel.childCount++;
         char path[20];
         sprintf(&path,"Images/%s.png",Buildings[i].name);
 
-        CreateImage(renderer,path ,(Vector2){35+i*160, windowSizeY-220},(Vector2){120,120},&buildPanel.children[buildPanel.childCount]);
+        CreateImage(renderer,path ,(Vector2){35+i*160, d_windowSizeY-220},(Vector2){120,120},&buildPanel.children[buildPanel.childCount]);
         buildPanel.childCount++;
-        CreateImage(renderer,"Images/GUI/Lock.png" ,(Vector2){40+i*160, windowSizeY-200},(Vector2){110,110},&buildPanel.children[buildPanel.childCount]);
+        CreateImage(renderer,"Images/GUI/Lock.png" ,(Vector2){40+i*160, d_windowSizeY-200},(Vector2){110,110},&buildPanel.children[buildPanel.childCount]);
         buildPanel.childCount++;
 
-        CreateText(Buildings[i].name,(Color){80,52,30},(Vector2){90,20},(Vector2){50+i*160,windowSizeY-100},renderer,font, &buildPanel.children[buildPanel.childCount]);
+        CreateText(Buildings[i].name,(Color){80,52,30},20,(Vector2){50+i*160,d_windowSizeY-100},renderer,font, &buildPanel.children[buildPanel.childCount]);
         buildPanel.childCount++;
         char additionalText[10];
         sprintf(&additionalText,"$%d",Buildings[i].price);
-        CreateText(additionalText,(Color){80,52,30},(Vector2){90,20},(Vector2){50+i*160,windowSizeY-60},renderer,font, &buildPanel.children[buildPanel.childCount]);
+        CreateText(additionalText,(Color){80,52,30},20,(Vector2){50+i*160,d_windowSizeY-60},renderer,font, &buildPanel.children[buildPanel.childCount]);
         buildPanel.childCount++;
         sprintf(&additionalText,"Level %d",Buildings[i].level);
-        CreateText(additionalText,(Color){80,52,30},(Vector2){60,20},(Vector2){65+i*160,windowSizeY-80},renderer,font, &buildPanel.children[buildPanel.childCount]);
+        CreateText(additionalText,(Color){80,52,30},20,(Vector2){65+i*160,d_windowSizeY-80},renderer,font, &buildPanel.children[buildPanel.childCount]);
         buildPanel.childCount++;
 
     }
 
-    CreateImage(renderer,"Images/GUI/Bulldozer.png",(Vector2){windowSizeX-230, windowSizeY-200},(Vector2){150,180}, &buildPanel.children[buildPanel.childCount]);
+    CreateImage(renderer,"Images/GUI/Bulldozer.png",(Vector2){d_windowSizeX-230, d_windowSizeY-200},(Vector2){150,180}, &buildPanel.children[buildPanel.childCount]);
     buildPanel.childCount++;
 
 
     //Ültető menü létrehozása
-    CreateImage(renderer,"Images/GUI/WidePanel.png",(Vector2){0, windowSizeY-220},(Vector2){windowSizeX,220}, &plantPanel.panelImage);
-    CreateImage(renderer,"Images/GUI/Exit.png",(Vector2){windowSizeX-60, windowSizeY-220},(Vector2){50,50}, &plantPanel.children[plantPanel.childCount]);
+    CreateImage(renderer,"Images/GUI/WidePanel.png",(Vector2){0, d_windowSizeY-220},(Vector2){d_windowSizeX,220}, &plantPanel.panelImage);
+    CreateImage(renderer,"Images/GUI/Exit.png",(Vector2){d_windowSizeX-60, d_windowSizeY-220},(Vector2){50,50}, &plantPanel.children[plantPanel.childCount]);
     plantPanel.childCount++;
-    CreateText("Plant",(Color){80,52,30},(Vector2){150,50},(Vector2){20,windowSizeY-270},renderer,font, &plantPanel.children[plantPanel.childCount]);
+    CreateText("Plant",(Color){80,52,30},50,(Vector2){20,d_windowSizeY-270},renderer,font, &plantPanel.children[plantPanel.childCount]);
     plantPanel.childCount++;
 
     for(int i = 0; i<PlantItemCount; i++)
     {
-        CreateImage(renderer,"Images/GUI/Item.png",(Vector2){20+i*160, windowSizeY-200},(Vector2){150,180}, &plantPanel.children[plantPanel.childCount]);
+        CreateImage(renderer,"Images/GUI/Item.png",(Vector2){20+i*160, d_windowSizeY-200},(Vector2){150,180}, &plantPanel.children[plantPanel.childCount]);
         plantPanel.childCount++;
         char path[20];
         sprintf(&path,"Images/Icons/%sseed.png",Plants[i].name,"seed");
 
-        CreateImage(renderer,path ,(Vector2){45+i*160, windowSizeY-190},(Vector2){100,100},&plantPanel.children[plantPanel.childCount]);
+        CreateImage(renderer,path ,(Vector2){45+i*160, d_windowSizeY-190},(Vector2){100,100},&plantPanel.children[plantPanel.childCount]);
         plantPanel.childCount++;
-        CreateImage(renderer,"Images/GUI/Lock.png" ,(Vector2){40+i*160, windowSizeY-200},(Vector2){110,110},&plantPanel.children[plantPanel.childCount]);
+        CreateImage(renderer,"Images/GUI/Lock.png" ,(Vector2){40+i*160, d_windowSizeY-200},(Vector2){110,110},&plantPanel.children[plantPanel.childCount]);
         plantPanel.childCount++;
-        CreateText(Plants[i].name,(Color){80,52,30},(Vector2){90,20},(Vector2){50+i*160,windowSizeY-100},renderer,font, &plantPanel.children[plantPanel.childCount]);
+        CreateText(Plants[i].name,(Color){80,52,30},20,(Vector2){50+i*160,d_windowSizeY-100},renderer,font, &plantPanel.children[plantPanel.childCount]);
         plantPanel.childCount++;
         char additionalText[10];
         sprintf(&additionalText,"$%d",Plants[i].price);
-        CreateText(additionalText,(Color){80,52,30},(Vector2){40,20},(Vector2){70+i*160,windowSizeY-60},renderer,font, &plantPanel.children[plantPanel.childCount]);
+        CreateText(additionalText,(Color){80,52,30},20,(Vector2){70+i*160,d_windowSizeY-60},renderer,font, &plantPanel.children[plantPanel.childCount]);
         plantPanel.childCount++;
         sprintf(&additionalText,"Level %d",Plants[i].level);
-        CreateText(additionalText,(Color){80,52,30},(Vector2){60,20},(Vector2){65+i*160,windowSizeY-80},renderer,font, &plantPanel.children[plantPanel.childCount]);
+        CreateText(additionalText,(Color){80,52,30},20,(Vector2){65+i*160,d_windowSizeY-80},renderer,font, &plantPanel.children[plantPanel.childCount]);
         plantPanel.childCount++;
 
     }
 
 
     //A "barkács" épületekhez tartozó menü létrehozása
-    CreateCraftPanel(renderer,"Windmill", (Vector2){windowSizeX,windowSizeY}, &crafters[0].menu);
-    CreateCraftPanel(renderer,"Brewery", (Vector2){windowSizeX,windowSizeY}, &crafters[1].menu);
-    CreateCraftPanel(renderer,"Bakery", (Vector2){windowSizeX,windowSizeY}, &crafters[2].menu);
+    CreateCraftPanel(renderer,"Windmill", (Vector2){d_windowSizeX,d_windowSizeY}, &crafters[0].menu);
+    CreateCraftPanel(renderer,"Brewery", (Vector2){d_windowSizeX,d_windowSizeY}, &crafters[1].menu);
+    CreateCraftPanel(renderer,"Bakery", (Vector2){d_windowSizeX,d_windowSizeY}, &crafters[2].menu);
 
+    return (Canvas){buildPanel, plantPanel, buildButton, plantButton, infoBox, moneyText, levelText};
 }
+
+int SelectedTileId;
+int SelectInfoAlpha;
 
 int main(int argc, char *argv[])
 {
-    Init_Parameters();
-    Init_GUI();
-    Init_Map();
+    //Font készlet betöltése
+    TTF_Init();
+    font = TTF_OpenFont("system.fon", 20);
 
+    Item AllItem[4];
+    int itemCount = 4;
+
+    //Inventory
+    AllItem[0] = (Item){.Name = "Wheat", .Price = 200, .Amount = 0};
+    AllItem[1] = (Item){.Name = "Potato", .Price = 200, .Amount = 0};
+    AllItem[2] = (Item){.Name = "Corn", .Price = 200, .Amount = 0};
+    AllItem[3] = (Item){.Name = "Tomato", .Price = 200, .Amount = 0};
+
+    //Az építhető épületek deklarálása (név, ár, szint, idő, azonosító)
+    Buildings[0] = (ShopItem){"Field",100,1,10,21};
+    Buildings[1] = (ShopItem){"Beehive",1000,5,60,22};
+    Buildings[2] = (ShopItem){"Greenhouse",5000,10,300,23};
+    Buildings[3] = (ShopItem){"Ground",100,1,60,10}; //Megsemmisítés gombhoz
+    Buildings[4] = (ShopItem){"ConstructionSite",0,1,60,1}; //Építés alatt álló épületek
+
+    //Ültethető növények deklarálása (név, ár, szint, idő, azonosító)
+    Plants[0] = (ShopItem){"Wheat",1,1,30,101};
+    Plants[1] = (ShopItem){"Potato",2,2,60,102};
+    Plants[2] = (ShopItem){"Corn",5,3,120,103};
+    Plants[3] = (ShopItem){"Tomato",10,5,240,104};
+
+    //A "barkács" épületek deklarálása
+    crafters[0] = (Crafter){"Windmill"};
+    crafters[1] = (Crafter){"Brewery"};
+    crafters[2] = (Crafter){"Bakery"};
+
+    //Ablak léterhozása
+    CreateWindow("FarmerRealm", d_windowSizeX, d_windowSizeY, &window, &renderer);
+
+    LastTile = &tiles[0];
+
+    Init_Map(origin);
+    printf("Map loaded...\n");
+
+    Canvas canvas = Init_GUI();
+    printf("GUI loaded...\n");
+    printf("Canvas exist %d\n",canvas.plantPanel.childCount);
+
+    //Ha már van elmentett idő akkor ez hozzáadja a mostanihoz
+    unsigned plussTime = timer;
+
+    //Háttérszín beállítása
     SDL_SetRenderDrawColor(renderer, 3, 190, 252, 255);
 
-    timer = SDL_GetTicks();
-
     SDL_Event event;
+
+    //Fő ciklus
     while (event.type != SDL_QUIT)
     {
-
+        //Inputok kezelése
         while (SDL_PollEvent(&event))
         {
             switch(event.type)
@@ -486,14 +470,10 @@ int main(int argc, char *argv[])
                 case SDL_MOUSEBUTTONDOWN:
                     if(event.button.button == 1)
                         OnLeftMouseDown(event);
-                    else if(event.button.button == 3)
-                        OnRightMouseDown(event);
                     break;
                 case SDL_MOUSEBUTTONUP:
                     if(event.button.button == 1)
-                        OnLeftMouseUp(event);
-                    else if(event.button.button == 3)
-                        OnRightMouseUp(event);
+                        OnLeftMouseUp(event, &canvas, AllItem, itemCount);
                     break;
                 case SDL_MOUSEMOTION:
                     OnMouseMove(event);
@@ -502,97 +482,133 @@ int main(int argc, char *argv[])
             }
         }
 
+        //Idő kezelése
         SDL_Delay(10);
         unsigned now;
         unsigned delta_time;
 
-        if(plusTime > 0)
+        now = SDL_GetTicks()+plussTime;
+        delta_time = now - timer;
+        timer += delta_time;
+
+        //Futó folyamatok ellenőrzése
+
+        for(int i = 0; i<plist.n;i++)
         {
-            now = plusTime;
-            timer = plusTime;
-            plusTime = 0;
+            if(plist.l[i].type == Plant && plist.l[i].t >= timer/1000)
+            {
+                Process *p = &plist.l[i];
+                char pathToPlant[200];
+                ShopItem *plant = GetShopItemById(p->misc,PlantItemCount,Plants);
+                int ImageIndex = GetPlantImageId(plant,p->t);
+                sprintf(pathToPlant,"Images/Plants/%s/%s%d.png",plant->name,plant->name,ImageIndex+1);
+
+                Vector2 pos = {tiles[p->TileID].img.destination.x,tiles[p->TileID].img.destination.y};
+                SDL_DestroyTexture(&tiles[p->TileID].additionalImage);
+                CreateImage(renderer, pathToPlant,pos,(Vector2){d_baseSize,d_baseSize}, &tiles[p->TileID].additionalImage);
+
+                tiles[p->TileID].additional = true;
+            }
+
+            if(plist.l[i].t <= now/1000)
+            {
+                if(plist.l[i].type == Building)
+                {
+                    int id = 0;
+
+                    for(int k = 0; k<BuildItemCount+1; k++)
+                    {
+                        if(Buildings[k].ID == plist.l[i].misc)
+                        {
+                            id = k;
+                        }
+                    }
+
+                    char path[100];
+                    sprintf(path, "Images/%s.png",Buildings[id].name);
+                    Vector2 position = {tiles[plist.l[i].TileID].img.destination.x,tiles[plist.l[i].TileID].img.destination.y};
+                    strcpy(tiles[plist.l[i].TileID].name,Buildings[id].name);
+                    CreateImage(renderer,path, position,(Vector2){d_baseSize,d_baseSize}, &tiles[plist.l[i].TileID].img);
+                    SetSave(plist.l[i].TileID,plist.l[i].misc,0);
+
+                    printf("Building of %s (%d) is done\n",Buildings[id].name,Buildings[id].ID);
+
+
+                    RemoveProcess(&plist, plist.l[i].ProcessID);
+                }
+            }
+        }
+
+
+        Image selectImage;
+        Tile select = tiles[SelectedTileId];
+        Process *selectedProcess = GetProcess(&plist,SelectedTileId);
+        char infos[100];
+
+        if(selectedProcess != NULL)
+        {
+            int timeLeft = (selectedProcess->t-(timer/1000));
+            char formattedTime[30];
+            FormatTime(timeLeft*1000, formattedTime);
+            sprintf(infos,"%s (%s)",select.name,formattedTime);
         }
         else
         {
-            now = SDL_GetTicks();
-            delta_time = now - timer;
-            timer = now;
+            sprintf(infos,"%s",select.name);
         }
 
+        CreateText(infos, (Color){80,52,30}, 30, (Vector2){d_windowSizeX/2-200,50}, renderer, font, &selectImage);
+        SDL_SetTextureAlphaMod(selectImage.texture, SelectInfoAlpha);
+
+        if(SelectInfoAlpha > 1)
+            SelectInfoAlpha-=delta_time/10;
+        else
+            SelectInfoAlpha = 0;
 
 
-
-        //int hour, minute,sec;
-
-
-        //FormatTime(timer, &hour,&minute,&sec);
-
-        for(int i = 0; i<100;i++)
-        {
-            if(BuildProcesses[i].tileID != -1)
-            {
-                BuildProcesses[i].time -= delta_time;
-
-                if(BuildProcesses[i].time <= 0)
-                {
-                    printf("Process %s done with ",BuildProcesses[i].path);
-                    printf("type: %d saved\n",BuildProcesses[i].misc);
-                    SetSave(BuildProcesses[i].tileID,BuildProcesses[i].misc,0);
-                    CreateImage(renderer,BuildProcesses[i].path,(Vector2){tiles[BuildProcesses[i].tileID].img.destination.x,tiles[BuildProcesses[i].tileID].img.destination.y},(Vector2){baseSize,baseSize}, &tiles[BuildProcesses[i].tileID].img);
-                    BuildProcesses[i].tileID = -1;
-                }
-            }
-
-
-        }
-
+        //Pénz és szint megjelenítése
         char intToString[20];
-        FormatTime(timer,&intToString);
-        CreateText(intToString, (Color){80,52,30}, (Vector2){150,50}, (Vector2){80,25}, renderer, font, &timeText);
 
-        sprintf(&intToString, "$%d", money);
-        CreateText(intToString, (Color){80,52,30}, (Vector2){150,50}, moneyPos, renderer, font, &moneyText);
+        sprintf(intToString, "$%d", money);
+        SDL_DestroyTexture(&canvas.moneyText);
+        CreateText(intToString, (Color){80,52,30}, 50, (Vector2){880,23}, renderer, font, &canvas.moneyText);
 
-        sprintf(&intToString, "Level %d", level);
-        CreateText(intToString, (Color){80,52,30}, (Vector2){75,30}, (Vector2){moneyPos.x+35,moneyPos.y+60}, renderer, font, &levelText);
+        sprintf(intToString, "Level %d", level);
+        SDL_DestroyTexture(&canvas.moneyText);
+        CreateText(intToString, (Color){80,52,30}, 30, (Vector2){880,85}, renderer, font, &canvas.levelText);
 
-        //printf("%lf\n", (double)timer/1000/60);
 
         SDL_RenderClear(renderer);
 
-
+        //Ellenőrzi hogy éppen milyen módban van a játék
         if(BuildMode)
             SetBuildColors();
 
         if(PlantMode)
             SetPlantColors();
 
+        //Térkép elemek megjelenítése
         for(int i = 0; i<mapSize; i++)
         {
             SDL_RenderCopy(renderer, tiles[i].img.texture, NULL, &tiles[i].img.destination);
+
+            if(tiles[i].additional)
+            {
+                SDL_RenderCopy(renderer, tiles[i].additionalImage.texture, NULL, &tiles[i].additionalImage.destination);
+            }
         }
 
+        SDL_RenderCopy(renderer, selectImage.texture, NULL, &selectImage.destination);
 
-        for(int i = 0; i<buttonCount; i++)
-            SDL_RenderCopy(renderer, buttons[i].img.texture, NULL, &buttons[i].img.destination);
-
-        SDL_RenderCopy(renderer, moneyBox.texture, NULL, &moneyBox.destination);
-        SDL_RenderCopy(renderer, moneyText.texture, NULL, &moneyText.destination);
-        SDL_RenderCopy(renderer, levelText.texture, NULL, &levelText.destination);
-
-        SDL_RenderCopy(renderer, timeBox.texture, NULL, &timeBox.destination);
-        SDL_RenderCopy(renderer, timeText.texture, NULL, &timeText.destination);
-
-        SDL_RenderCopy(renderer, buildButton.texture, NULL, &buildButton.destination);
-        SDL_RenderCopy(renderer, plantButton.texture, NULL, &plantButton.destination);
+        RenderCanvas(&canvas, renderer);
 
         //Az építkezési árak ellenőrzése és átszínezése
-        CheckShopItems(&buildPanel, Buildings, BuildChildCount,money,level);
-        CheckShopItems(&plantPanel, Plants, PlantChildCount,money,level);
+        CheckShopItems(&canvas.buildPanel, Buildings, BuildChildCount,money,level);
+        CheckShopItems(&canvas.plantPanel, Plants, PlantChildCount,money,level);
 
         //Az építő-és ültető menü animált megjelenítése
-        ShowAnimatedGUI(renderer, &buildPanel, PanelSpeed, windowSizeY);
-        ShowAnimatedGUI(renderer, &plantPanel, PanelSpeed, windowSizeY);
+        ShowAnimatedGUI(renderer, &canvas.buildPanel, d_windowSizeY);
+        ShowAnimatedGUI(renderer, &canvas.plantPanel, d_windowSizeY);
 
         //"Barkács" menük megjelenítése
         for(int i = 0; i<3; i++)
@@ -604,16 +620,21 @@ int main(int argc, char *argv[])
         SDL_RenderPresent(renderer);
     }
 
+    free(plist.l);
 
+    //Adatok mentése
     SaveStats(level, money, ((int)timer/1000));
-    printf("Saving...");
+    printf("Saving...\n");
 
+    //Fennmaradó dolgok bezárása
     TTF_CloseFont(font);
     SDL_Quit();
 
     return 0;
 }
 
+
+bool LeftMouseDown;
 
 void OnLeftMouseDown(SDL_Event e)
 {
@@ -624,35 +645,33 @@ void OnLeftMouseDown(SDL_Event e)
         tiles[i].positionToMouse = (Vector2){e.motion.x-tiles[i].img.destination.x,e.motion.y-tiles[i].img.destination.y};
 
     SDL_SetTextureColorMod(LastTile -> img.texture,200,200,200);
-
 }
-void OnRightMouseDown(SDL_Event e)
-{
 
-}
-void OnLeftMouseUp(SDL_Event e)
+void OnLeftMouseUp(SDL_Event e,Canvas *canvas, Item *AllItem, int ItemCount)
 {
     LeftMouseDown = false;
 
     //Kiszámítjuk az egérrel megtett út hosszát, hogy megállapítsuk, hogy click volt-e vagy vonszolás
     double moved = sqrt(pow(lastMousePos.x-e.motion.x,2)+pow(lastMousePos.y-e.motion.y,2));
 
+
     if(moved < 10)
     {
-        if(LastTile -> id != NULL)
+        if(LastTile != NULL)
         {
             SDL_SetTextureColorMod(LastTile -> img.texture,220,220,220);
             printf("[%d](%d:%d) - %s\n",LastTile -> id,LastTile -> coordinates.x, LastTile -> coordinates.y, LastTile -> name);
         }
 
-        level+=1;
         bool clicked = false;
 
+        SelectedTileId = LastTile ->id;
+        SelectInfoAlpha = 255;
 
         //Építkezés menü elemeinek kiválasztása
-        for(int i =2; i<buildPanel.childCount && !clicked; i+= BuildChildCount)
+        for(int i =2; i<canvas->buildPanel.childCount && !clicked; i+= BuildChildCount)
         {
-            if(OverUI((Vector2){e.motion.x, e.motion.y}, buildPanel.children[i].destination) && buildPanel.visible)
+            if(OverUI((Vector2){e.motion.x, e.motion.y}, canvas->buildPanel.children[i].destination) && canvas->buildPanel.visible)
             {
                 if(Buildings[(i-2)/BuildChildCount].price <= money && Buildings[(i-2)/BuildChildCount].level <= level)
                 {
@@ -660,8 +679,8 @@ void OnLeftMouseUp(SDL_Event e)
 
                     if(BuildMode)
                     {
-                        printf("Building selected: %s\n",Buildings[actualBuildItem]);
                         actualBuildItem = (i-2)/5;
+                        printf("Building selected: %s\n",Buildings[actualBuildItem].name);
                         SetBuildColors();
                     }
                     else
@@ -679,10 +698,10 @@ void OnLeftMouseUp(SDL_Event e)
             }
         }
 
-        //Építkezés menü elemeinek kiválasztása
-        for(int i =2; i<plantPanel.childCount && !clicked; i+= PlantChildCount)
+        //Ültetés menü elemeinek kiválasztása
+        for(int i =2; i<canvas->plantPanel.childCount && !clicked; i+= PlantChildCount)
         {
-            if(OverUI((Vector2){e.motion.x, e.motion.y}, plantPanel.children[i].destination) && plantPanel.visible)
+            if(OverUI((Vector2){e.motion.x, e.motion.y}, canvas->plantPanel.children[i].destination) && canvas->plantPanel.visible)
             {
                 if(Plants[(i-2)/PlantChildCount].price <= money && Plants[(i-2)/PlantChildCount].level <= level)
                 {
@@ -690,8 +709,8 @@ void OnLeftMouseUp(SDL_Event e)
 
                     if(PlantMode)
                     {
-                        printf("Plant selected: %s\n",Plants[actualPlantItem]);
                         actualPlantItem = (i-2)/5;
+                        printf("Plant selected: %s\n",Plants[actualPlantItem].name);
                         SetPlantColors();
                     }
                     else
@@ -725,66 +744,105 @@ void OnLeftMouseUp(SDL_Event e)
                 ClearColors();
                 LastTile = &tiles[0];
 
-                CloseBuildPanel();
-                ClosePlantPanel();
+                canvas->plantPanel.visible = false;
+                canvas->buildPanel.visible = false;
+                BuildMode = false;
+                ClearColors();
             }
         }
 
-        if(OverUI((Vector2){e.motion.x,e.motion.y},  buildPanel.children[0].destination) && buildPanel.visible)
+        if(OverUI((Vector2){e.motion.x,e.motion.y},  canvas->buildPanel.children[0].destination) && canvas->buildPanel.visible)
         {
-            CloseBuildPanel();
-        }
-        if(OverUI((Vector2){e.motion.x,e.motion.y},  plantPanel.children[0].destination) && plantPanel.visible)
-        {
-            ClosePlantPanel();
-        }
-
-        if(OverUI((Vector2){e.motion.x,e.motion.y},  buildButton.destination) && !buildPanel.visible)
-        {
-            buildPanel.visible = true;
-        }
-        if(OverUI((Vector2){e.motion.x,e.motion.y},  plantButton.destination) && !plantPanel.visible)
-        {
-            plantPanel.visible = true;
-        }
-
-        if(BuildMode && strcmp(LastTile -> name, "Ground") == 0)
-        {
-            char path[30];
-            sprintf(&path, "Images/%s.png", Buildings[actualBuildItem].name);
-
-            money -= Buildings[actualBuildItem].price;
-            CreateImage(renderer,"Images/ConstructionSite.png",(Vector2){LastTile -> img.destination.x,LastTile -> img.destination.y},(Vector2){baseSize,baseSize}, &tiles[LastTile -> id].img);
-            strcpy(tiles[LastTile -> id].name,"ConstructionSite");
+            canvas->buildPanel.visible = false;
             BuildMode = false;
-            AddProcess(LastTile -> id,1,Buildings[actualBuildItem].BuildTime, path, Buildings[actualBuildItem].BuildingID);
             ClearColors();
-            printf("Build started: %s (%ds)\n",Buildings[actualBuildItem].name, Buildings[actualBuildItem].BuildTime);
-
         }
-        else if(BuildMode && strcmp(Buildings[actualBuildItem].name, "Ground") == 0)
+        if(OverUI((Vector2){e.motion.x,e.motion.y},  canvas->plantPanel.children[0].destination) && canvas->plantPanel.visible)
         {
-            money -= Buildings[actualBuildItem].price;
-            CreateImage(renderer,"Images/ConstructionSite.png",(Vector2){LastTile -> img.destination.x,LastTile -> img.destination.y},(Vector2){baseSize,baseSize}, &tiles[LastTile -> id].img);
-            strcpy(tiles[LastTile -> id].name,Buildings[actualBuildItem].name);
-            BuildMode = false;
-            AddProcess(LastTile -> id,1,Buildings[actualBuildItem].BuildTime, "Images/Ground.png", 10);
-            ClearColors();
-            printf("Destruction started (%ds)\n",Buildings[actualBuildItem].BuildTime);
-
+            canvas->plantPanel.visible = false;
         }
 
+        if(OverUI((Vector2){e.motion.x,e.motion.y},  canvas->buildButton.destination) && !canvas->buildPanel.visible)
+        {
+            canvas->buildPanel.visible = true;
+        }
+        if(OverUI((Vector2){e.motion.x,e.motion.y},  canvas->plantButton.destination) && !canvas->plantPanel.visible)
+        {
+            canvas->plantPanel.visible = true;
+        }
 
-    }
-    else
-    {
+        if(BuildMode && (strcmp(LastTile -> name, "Ground") == 0 || strcmp(Buildings[actualBuildItem].name, "Ground") == 0))
+        {
+            money-= Buildings[actualBuildItem].price;
 
+            unsigned int id = LastTile->id;
+            unsigned long long int t = (timer/1000)+Buildings[actualBuildItem].time;
+
+            Process p = {id,Building,id,t,Buildings[actualBuildItem].ID};
+            AddProcess(&plist,p);
+
+            Vector2 position = {LastTile->img.destination.x,LastTile->img.destination.y};
+
+            CreateImage(renderer,"Images/ConstructionSite.png", position,(Vector2){d_baseSize,d_baseSize}, &LastTile->img);
+            strcpy(LastTile->name,"ConstructionSite");
+
+
+            BuildMode = false;
+
+            ClearColors();
+
+            unsigned long long int misc = t;
+            misc <<= 8;
+            misc += Buildings[actualBuildItem].ID;
+
+            SetSave(id,1,misc);
+
+            printf("%s(%d) building started (%d sec)\n",Buildings[actualBuildItem].name,Buildings[actualBuildItem].ID,Buildings[actualBuildItem].time);
+        }
+
+        if(PlantMode && strcmp(LastTile -> name, "Field") == 0)
+        {
+            money -= Plants[actualPlantItem].price;
+
+            unsigned int id = LastTile->id;
+            unsigned long long int t = (timer/1000)+Plants[actualPlantItem].time;
+
+            Process p = {id,Plant,id,t,Plants[actualPlantItem].ID};
+            AddProcess(&plist,p);
+
+            PlantMode = false;
+            ClearColors();
+
+            unsigned long long int misc = t;
+            misc <<= 8;
+            misc += Plants[actualPlantItem].ID;
+
+            SetSave(id,21,misc);
+
+            printf("%s placed on field (%d:%d)",Plants[actualPlantItem].name, LastTile ->coordinates.x, LastTile ->coordinates.y);
+        }
+
+        Process *selectedProcess = GetProcess(&plist, LastTile->id);
+        if(selectedProcess != NULL && selectedProcess->t < timer/1000)
+        {
+            ShopItem *plant = GetShopItemById(selectedProcess->misc,PlantItemCount, Plants);
+            printf("Product (%s) is done\n",plant->name);
+            Item *item = GetItemByName(plant->name, ItemCount, AllItem);
+            item->Amount++;
+
+            printf("Actual inventory:\n");
+            for(int i = 0; i<ItemCount;i++)
+                printf("\to %s: %d\n",AllItem[i].Name, AllItem[i].Amount);
+
+
+            SetSave(selectedProcess->TileID, 21,0);
+            SDL_DestroyTexture(tiles[selectedProcess->TileID].additionalImage.texture);
+            tiles[selectedProcess->TileID].additional = false;
+            RemoveProcess(&plist,selectedProcess->ProcessID);
+        }
     }
 }
-void OnRightMouseUp(SDL_Event e)
-{
 
-}
 void OnMouseMove(SDL_Event e)
 {
     //Ha bármilyen panel meg van nyitva akkor kilép
@@ -795,13 +853,13 @@ void OnMouseMove(SDL_Event e)
 
 
     //Térkép mozgatása
-    for(int i = 0; i<mapSize; i++)
+    for(int i = 0; i<mapSize && LeftMouseDown; i++)
     {
-        if(LeftMouseDown)
-        {
-            tiles[i].img.destination.x = (e.motion.x-tiles[i].positionToMouse.x);
-            tiles[i].img.destination.y = (e.motion.y-tiles[i].positionToMouse.y);
-        }
+        tiles[i].img.destination.x = (e.motion.x-tiles[i].positionToMouse.x);
+        tiles[i].img.destination.y = (e.motion.y-tiles[i].positionToMouse.y);
+        tiles[i].additionalImage.destination.x = (e.motion.x-tiles[i].positionToMouse.x);
+        tiles[i].additionalImage.destination.y = (e.motion.y-tiles[i].positionToMouse.y);
+
     }
 
 
@@ -811,7 +869,7 @@ void OnMouseMove(SDL_Event e)
 
     while(!finded && index < mapSize)
     {
-        if(MouseOverImage(tiles[index].img.destination, (Vector2){e.motion.x,e.motion.y}, baseSize))
+        if(MouseOverImage(tiles[index].img.destination, (Vector2){e.motion.x,e.motion.y}, d_baseSize))
         {
             if(tiles[index].id != LastTile -> id)
             {
@@ -826,45 +884,6 @@ void OnMouseMove(SDL_Event e)
         index++;
     }
 
-}
-
-void ClosePlantPanel()
-{
-    plantPanel.visible = false;
-}
-
-void CloseBuildPanel()
-{
-    buildPanel.visible = false;
-    BuildMode = false;
-    ClearColors();
-}
-
-void AddProcess(int id, unsigned char type, int t, char path[], int m)
-{
-    int i = 0;
-
-    while(BuildProcesses[i].tileID != -1)
-    {
-        i++;
-    }
-
-    BuildProcesses[i].tileID = id;
-    BuildProcesses[i].time = t*1000;
-    BuildProcesses[i].misc = m;
-
-    strcpy(&BuildProcesses[i].path, path);
-
-    unsigned long int timeToDone =((timer/1000)+t);
-
-    unsigned long long int timeMisc = 0;
-    timeMisc += timeToDone;
-    timeMisc <<= 8;
-    timeMisc += m;
-
-    SetSave(id,type,timeMisc);
-
-    printf("Process added to index: %d Misc: %d Time when done: %lu sec\n",i,BuildProcesses[i].misc,timeToDone);
 }
 
 void SetBuildColors()
@@ -904,8 +923,6 @@ void SetPlantColors()
         }
     }
 }
-
-
 void ClearColors()
 {
     for(int i = 0; i<mapSize; i++)
@@ -914,3 +931,35 @@ void ClearColors()
     }
 }
 
+//Az aktuális növény képének kiszámolása a hátralévő időből
+int GetPlantImageId(ShopItem *plant, unsigned long long int TimeWhenDone)
+{
+    unsigned long long TimeLeft = TimeWhenDone-(timer/1000);
+    unsigned int AllTime = plant->time;
+    unsigned short int PictureTime = AllTime/3;
+
+
+    return (AllTime-TimeLeft)/PictureTime;
+}
+
+//Megkeresi azonosító alapján a tárgyat a tömbben
+ShopItem* GetShopItemById(int id, int n, ShopItem *itemList)
+{
+    for(int i = 0; i<n; i++)
+    {
+        if(itemList[i].ID == id)
+            return &itemList[i];
+    }
+    return NULL;
+}
+
+Item* GetItemByName(char *name, int n, Item *itemList)
+{
+    for(int i = 0; i<n;i++)
+    {
+        if(strcmp(name, itemList[i].Name) == 0)
+            return &itemList[i];
+    }
+
+    return NULL;
+}
