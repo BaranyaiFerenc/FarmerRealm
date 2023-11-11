@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <SDL.h>
 #include <SDL2_gfxPrimitives.h>
 #include <SDL_ttf.h>
@@ -27,7 +28,16 @@ typedef struct Image //Alap kép struktúra az átláthatóbb és egyszerûbb kódért
     SDL_Rect destination;
 } Image;
 
+typedef struct Source
+{
+    SDL_Texture* texture;
+    char path[100];
+} Source;
+
 typedef enum ImageType {game, gui} ImageType;
+
+SDL_Texture* GetSource(Source *sourceList, char *path, SDL_Renderer *renderer);
+void LoadSource(Source *sourceList, char *path, SDL_Renderer *renderer);
 
 /*Ablak létrehozása*/
 void CreateWindow(char const *text, int width, int height, SDL_Window **pwindow, SDL_Renderer **prenderer);

@@ -54,14 +54,18 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="GUI.h" />
+		<Unit filename="GameElements.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="GameElements.h" />
 		<Unit filename="Graphics.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="Graphics.h" />
-		<Unit filename="Inventory.c">
+		<Unit filename="ProcessHandler.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="Inventory.h" />
+		<Unit filename="ProcessHandler.h" />
 		<Unit filename="main.c">
 			<Option compilerVar="CC" />
 		</Unit>

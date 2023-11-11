@@ -19,6 +19,8 @@ typedef struct Process
     int TileID;
     unsigned long long t;
     int misc;
+
+    bool done;
 } Process;
 
 typedef struct ProcessList

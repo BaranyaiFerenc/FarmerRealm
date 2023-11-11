@@ -89,3 +89,49 @@ void SaveStats(unsigned int level,unsigned int money, unsigned long time)
     fclose(file);
 
 }
+
+void SaveInventory(Item *inventory, int n)
+{
+    int saveLogs[n];
+
+    for(int i = 0; i<n;i++)
+    {
+        saveLogs[i] = i;
+        saveLogs[i] <<= 16;
+        saveLogs[i] += inventory[i].Amount;
+    }
+
+    FILE *file;
+    file = fopen("inventory.bin","wb");
+
+    fwrite(&saveLogs,sizeof(saveLogs), 1, file);
+
+    fclose(file);
+}
+
+void GetInventory(Item *inventory, int n)
+{
+    FILE* file = fopen("inventory.bin","rb");
+
+    if(file == NULL) {
+      printf("No inventory save\n");
+      return;
+    }
+
+    int log;
+    int inventoryLogs[n];
+    int index = 0;
+
+    while (fread(&log,sizeof(log),1,file))
+    {
+        inventoryLogs[index] = log;
+        index++;
+    }
+
+    fclose(file);
+
+    for(int i = 0; i<n;i++)
+    {
+        inventory[i].Amount = inventoryLogs[i] << 16 >>16;
+    }
+}

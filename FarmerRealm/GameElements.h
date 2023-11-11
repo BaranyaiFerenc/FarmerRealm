@@ -11,7 +11,7 @@ typedef struct Tile //Alap csempe struktúra ezekre épül a játék
     Vector2 coordinates;
     Image img;
     Image additionalImage;
-    bool additional;
+    Image icon;
 } Tile;
 
 typedef struct TileMatrix
@@ -20,6 +20,14 @@ typedef struct TileMatrix
     int row_size;
     int column_size;
 } TileMatrix;
+
+
+typedef struct Item
+{
+    char Name[100];
+    unsigned int Price;
+    unsigned int Amount;
+} Item;
 
 
 void AddElementToMatrix(TileMatrix *matrix, Tile tile, int r, int c);

@@ -2,44 +2,72 @@
 <CodeBlocks_layout_file>
 	<FileVersion major="1" minor="0" />
 	<ActiveTarget name="Debug" />
-	<File name="Graphics.h" open="1" top="0" tabpos="4" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
-		<Cursor>
-			<Cursor1 position="335" topLine="18" />
-		</Cursor>
-	</File>
-	<File name="GUI.c" open="1" top="0" tabpos="3" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
-		<Cursor>
-			<Cursor1 position="2968" topLine="81" />
-		</Cursor>
-	</File>
-	<File name="Inventory.c" open="0" top="0" tabpos="8" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
-		<Cursor>
-			<Cursor1 position="84" topLine="0" />
-		</Cursor>
-	</File>
-	<File name="main.c" open="1" top="1" tabpos="1" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
-		<Cursor>
-			<Cursor1 position="7702" topLine="225" />
-		</Cursor>
-	</File>
 	<File name="Filemanager.c" open="1" top="0" tabpos="7" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="584" topLine="8" />
+			<Cursor1 position="2080" topLine="41" />
+		</Cursor>
+	</File>
+	<File name="ProcessHandler.c" open="1" top="0" tabpos="9" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="0" topLine="1" />
 		</Cursor>
 	</File>
 	<File name="GUI.h" open="1" top="0" tabpos="2" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="349" topLine="2" />
+			<Cursor1 position="1260" topLine="27" />
 		</Cursor>
 	</File>
-	<File name="Filemanager.h" open="1" top="0" tabpos="6" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+	<File name="GameElements.c" open="1" top="0" tabpos="10" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="219" topLine="0" />
+			<Cursor1 position="403" topLine="0" />
+		</Cursor>
+	</File>
+	<File name="GUI.c" open="1" top="0" tabpos="3" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="988" topLine="26" />
 		</Cursor>
 	</File>
 	<File name="Graphics.c" open="1" top="0" tabpos="5" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="1154" topLine="21" />
+			<Cursor1 position="749" topLine="30" />
+		</Cursor>
+	</File>
+	<File name="Graphics.h" open="1" top="0" tabpos="4" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="859" topLine="6" />
+		</Cursor>
+	</File>
+	<File name="Filemanager.h" open="1" top="0" tabpos="6" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="274" topLine="0" />
+		</Cursor>
+	</File>
+	<File name="ProcessHandler.h" open="1" top="0" tabpos="8" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="342" topLine="10" />
+		</Cursor>
+	</File>
+	<File name="main.c" open="1" top="0" tabpos="1" split="0" active="1" splitpos="0" zoom_1="1" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="24766" topLine="324" />
+		</Cursor>
+		<Folding>
+			<Collapse line="96" />
+			<Collapse line="320" />
+			<Collapse line="689" />
+			<Collapse line="700" />
+			<Collapse line="891" />
+			<Collapse line="934" />
+			<Collapse line="961" />
+			<Collapse line="971" />
+			<Collapse line="980" />
+			<Collapse line="991" />
+			<Collapse line="1001" />
+		</Folding>
+	</File>
+	<File name="GameElements.h" open="1" top="1" tabpos="11" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="468" topLine="0" />
 		</Cursor>
 	</File>
 </CodeBlocks_layout_file>

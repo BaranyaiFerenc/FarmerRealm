@@ -1,5 +1,43 @@
 #include "Graphics.h"
 
+Source sources[100];
+
+SDL_Texture* GetSource(Source *sourceList, char *path, SDL_Renderer *renderer)
+{
+    int i = 0;
+
+    for(i; sourceList[i].texture != NULL; i++)
+    {
+        if(strcmp(sourceList[i].path, path) == 0)
+        {
+            return sourceList[i].texture;
+        }
+    }
+
+    LoadSource(sourceList, path, renderer);
+    return sourceList[i].texture;
+}
+
+void LoadSource(Source *sourceList, char *path, SDL_Renderer *renderer)
+{
+    int i =0;
+    for(i;sourceList[i].texture != NULL;i++);
+
+    strcpy(sourceList[i].path, path);
+    SDL_Surface* surface = IMG_Load(path);
+
+    if(surface != NULL)
+    {
+        sourceList[i].texture = SDL_CreateTextureFromSurface(renderer, surface);
+
+        printf("%s loaded to game\n",path);
+    }
+    else
+    {
+        printf("The image %s couldn't load to memory :(\n",path);
+    }
+}
+
 void CreateWindow(char const *text, int width, int height, SDL_Window **pwindow, SDL_Renderer **prenderer)
 {
     if (SDL_Init(SDL_INIT_EVERYTHING) < 0)
@@ -31,10 +69,14 @@ void CreateWindow(char const *text, int width, int height, SDL_Window **pwindow,
 void CreateImage(SDL_Renderer* renderer, char *path, Vector2 positionToPlace, Vector2 size, Image *img)
 {
     //printf("Create image: %s\n",path);
+    /*
     SDL_Surface* surface = IMG_Load(path);
     img -> texture = SDL_CreateTextureFromSurface(renderer, surface);
 
     SDL_FreeSurface(surface);
+    */
+
+    img->texture = GetSource(sources, path,renderer);
 
     img -> destination.w = size.x;
     img -> destination.h = size.y;

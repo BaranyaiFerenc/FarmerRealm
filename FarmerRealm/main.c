@@ -28,12 +28,6 @@ typedef struct Crafter
     Process ActiveProcess[3];
 } Crafter;
 
-typedef struct Item
-{
-    char Name[100];
-    unsigned int Price;
-    unsigned int Amount;
-} Item;
 
 
 //Irányítás
@@ -96,9 +90,8 @@ Vector2 moneyPos;
 
 TTF_Font *font;
 
-
-    GUI_Panel buildPanel,plantPanel;
-    Image buildButton,plantButton,infoBox,moneyText,levelText;
+GUI_Panel buildPanel,plantPanel;
+Image buildButton,plantButton,infoBox,moneyText,levelText;
 
 void Init_Map(Vector2 origin)
 {
@@ -115,7 +108,6 @@ void Init_Map(Vector2 origin)
 
     if(file != NULL)
     {
-        fclose(file);
         unsigned long long int saves[2500];
 
         GetSave("save.bin",saves);
@@ -237,10 +229,13 @@ void Init_Map(Vector2 origin)
                 //AddElementToMatrix(&matrix,tiles[index],x,y);
             }
         }
+
+        fclose(file);
         //printf("Matrix created with %dx%d size\n",matrix.column_size,matrix.row_size);
         return;
     }
 
+    fclose(file);
     file = fopen("save.bin", "wb");
 
     unsigned long long int stats = 0;
@@ -406,20 +401,45 @@ Canvas Init_GUI()
 int SelectedTileId;
 int SelectInfoAlpha;
 
+void EndProduction(Process *process, Item *inventory, int n)
+{
+    Tile *processTile = &tiles[process->TileID];
+    printf("Process tile found\n");
+
+    if(strcmp(processTile->name, "Field") == 0)
+    {
+        ShopItem *shopItem = GetShopItemById(process->misc, PlantItemCount, Plants);
+
+        Item *product = GetItemByName(shopItem->name, n,inventory);
+
+        char path[100];
+        sprintf(path,"/Images/Icons/%s.png",product->Name);
+        printf("Process icon path: %s\n",path);
+
+        CreateImage(renderer, path, (Vector2){processTile->img.destination.x,processTile->img.destination.y},(Vector2){200,200} ,&tiles[process->TileID].icon);
+        printf("Process icon created\n");
+    }
+}
+
 int main(int argc, char *argv[])
 {
     //Font készlet betöltése
+    //A betűkészlet Microsoft Corporation által 8514syse.fon Windows 10-ben megtalálható előre telepített
     TTF_Init();
-    font = TTF_OpenFont("system.fon", 20);
+    font = TTF_OpenFont("System.fon", 20);
 
-    Item AllItem[4];
-    int itemCount = 4;
+
+    int ItemCount = 5;
+    Item AllItem[ItemCount];
 
     //Inventory
     AllItem[0] = (Item){.Name = "Wheat", .Price = 200, .Amount = 0};
     AllItem[1] = (Item){.Name = "Potato", .Price = 200, .Amount = 0};
     AllItem[2] = (Item){.Name = "Corn", .Price = 200, .Amount = 0};
     AllItem[3] = (Item){.Name = "Tomato", .Price = 200, .Amount = 0};
+    AllItem[4] = (Item){.Name = "Honey", .Price = 200, .Amount = 0};
+
+    GetInventory(AllItem, ItemCount);
 
     //Az építhető épületek deklarálása (név, ár, szint, idő, azonosító)
     Buildings[0] = (ShopItem){"Field",100,1,10,21};
@@ -459,6 +479,9 @@ int main(int argc, char *argv[])
 
     SDL_Event event;
 
+    double iconSize = 50;
+    bool grow = false;
+
     //Fő ciklus
     while (event.type != SDL_QUIT)
     {
@@ -473,17 +496,32 @@ int main(int argc, char *argv[])
                     break;
                 case SDL_MOUSEBUTTONUP:
                     if(event.button.button == 1)
-                        OnLeftMouseUp(event, &canvas, AllItem, itemCount);
+                        OnLeftMouseUp(event, &canvas, AllItem, ItemCount);
                     break;
                 case SDL_MOUSEMOTION:
                     OnMouseMove(event);
                     break;
+                case SDL_KEYDOWN:
+                    if(event.key.keysym.sym == SDLK_UP)
+                        level++;
+                    if(event.key.keysym.sym == SDLK_DOWN && level > 1)
+                        level--;
+                    if(event.key.keysym.sym == SDLK_RIGHT)
+                        money+=1000;
+                    if(event.key.keysym.sym == SDLK_LEFT && money > 1000)
+                        money-=1000;
+                    if(event.key.keysym.sym == SDLK_i)
+                    {
+                        printf("Actual inventory:\n");
+                        for(int i = 0; i<ItemCount;i++)
+                            printf("\to %s: %d\n",AllItem[i].Name, AllItem[i].Amount);
+                    }
 
             }
         }
 
         //Idő kezelése
-        SDL_Delay(10);
+        //SDL_Delay(10);
         unsigned now;
         unsigned delta_time;
 
@@ -495,7 +533,7 @@ int main(int argc, char *argv[])
 
         for(int i = 0; i<plist.n;i++)
         {
-            if(plist.l[i].type == Plant && plist.l[i].t >= timer/1000)
+            if(plist.l[i].type == Plant && plist.l[i].t >= timer/1000 && !plist.l[i].done)
             {
                 Process *p = &plist.l[i];
                 char pathToPlant[200];
@@ -504,10 +542,24 @@ int main(int argc, char *argv[])
                 sprintf(pathToPlant,"Images/Plants/%s/%s%d.png",plant->name,plant->name,ImageIndex+1);
 
                 Vector2 pos = {tiles[p->TileID].img.destination.x,tiles[p->TileID].img.destination.y};
-                SDL_DestroyTexture(&tiles[p->TileID].additionalImage);
                 CreateImage(renderer, pathToPlant,pos,(Vector2){d_baseSize,d_baseSize}, &tiles[p->TileID].additionalImage);
+            }
 
-                tiles[p->TileID].additional = true;
+            if(plist.l[i].type == Plant && plist.l[i].t <= timer/1000 && !plist.l[i].done)
+            {
+                plist.l[i].done = true;
+                printf("End production...\n");
+
+                //EndProduction(&plist.l[i], AllItem, ItemCount);
+
+                ShopItem *shopItem = GetShopItemById(plist.l[i].misc, PlantItemCount, Plants);
+
+                Item *product = GetItemByName(shopItem->name, ItemCount,AllItem);
+
+                char path[100];
+                sprintf(path,"Images/Icons/%s.png",product->Name);
+
+                CreateImage(renderer,path, (Vector2){100,100}, (Vector2){50,50}, &tiles[plist.l[i].TileID].icon);
             }
 
             if(plist.l[i].t <= now/1000)
@@ -587,14 +639,39 @@ int main(int argc, char *argv[])
         if(PlantMode)
             SetPlantColors();
 
+
+        iconSize += delta_time*0.05*(grow?1:-1);
+
+        if((grow && iconSize > 50) || (!grow && iconSize < 30))
+            grow = !grow;
+
         //Térkép elemek megjelenítése
         for(int i = 0; i<mapSize; i++)
         {
+            if(LastTile -> id == tiles[i].id)
+                SDL_SetTextureColorMod(tiles[i].img.texture,220,220,220);
+            else
+                SDL_SetTextureColorMod(tiles[i].img.texture,255,255,255);
+
             SDL_RenderCopy(renderer, tiles[i].img.texture, NULL, &tiles[i].img.destination);
 
-            if(tiles[i].additional)
+            if(tiles[i].additionalImage.texture != NULL)
             {
                 SDL_RenderCopy(renderer, tiles[i].additionalImage.texture, NULL, &tiles[i].additionalImage.destination);
+            }
+
+            if(tiles[i].icon.texture != NULL)
+            {
+
+                tiles[i].icon.destination.x = tiles[i].img.destination.x+75+(50-iconSize)/2;
+                tiles[i].icon.destination.y = tiles[i].img.destination.y+75+(50-iconSize)/2;
+
+
+                tiles[i].icon.destination.h = iconSize;
+                tiles[i].icon.destination.w = iconSize;
+
+                SDL_RenderCopy(renderer, tiles[i].icon.texture, NULL, &tiles[i].icon.destination);
+
             }
         }
 
@@ -602,13 +679,13 @@ int main(int argc, char *argv[])
 
         RenderCanvas(&canvas, renderer);
 
-        //Az építkezési árak ellenőrzése és átszínezése
-        CheckShopItems(&canvas.buildPanel, Buildings, BuildChildCount,money,level);
-        CheckShopItems(&canvas.plantPanel, Plants, PlantChildCount,money,level);
-
         //Az építő-és ültető menü animált megjelenítése
-        ShowAnimatedGUI(renderer, &canvas.buildPanel, d_windowSizeY);
-        ShowAnimatedGUI(renderer, &canvas.plantPanel, d_windowSizeY);
+        ShowAnimatedGUI(renderer, &canvas.buildPanel, d_windowSizeY, Buildings, BuildChildCount,money,level);
+        ShowAnimatedGUI(renderer, &canvas.plantPanel, d_windowSizeY, Plants, PlantChildCount,money,level);
+
+
+        //Romboló gomb külön kerül megjelenítésre mivel ez nem hasonlít az ültető panel elemeihez így nem szabványos
+        SDL_RenderCopy(renderer, canvas.buildPanel.children[canvas.buildPanel.childCount-1].texture,NULL,&canvas.buildPanel.children[canvas.buildPanel.childCount-1].destination);
 
         //"Barkács" menük megjelenítése
         for(int i = 0; i<3; i++)
@@ -624,11 +701,13 @@ int main(int argc, char *argv[])
 
     //Adatok mentése
     SaveStats(level, money, ((int)timer/1000));
+    SaveInventory(AllItem, ItemCount);
     printf("Saving...\n");
 
     //Fennmaradó dolgok bezárása
     TTF_CloseFont(font);
     SDL_Quit();
+    IMG_Quit();
 
     return 0;
 }
@@ -819,7 +898,7 @@ void OnLeftMouseUp(SDL_Event e,Canvas *canvas, Item *AllItem, int ItemCount)
 
             SetSave(id,21,misc);
 
-            printf("%s placed on field (%d:%d)",Plants[actualPlantItem].name, LastTile ->coordinates.x, LastTile ->coordinates.y);
+            printf("%s placed on field (%d:%d)\n",Plants[actualPlantItem].name, LastTile ->coordinates.x, LastTile ->coordinates.y);
         }
 
         Process *selectedProcess = GetProcess(&plist, LastTile->id);
@@ -830,14 +909,10 @@ void OnLeftMouseUp(SDL_Event e,Canvas *canvas, Item *AllItem, int ItemCount)
             Item *item = GetItemByName(plant->name, ItemCount, AllItem);
             item->Amount++;
 
-            printf("Actual inventory:\n");
-            for(int i = 0; i<ItemCount;i++)
-                printf("\to %s: %d\n",AllItem[i].Name, AllItem[i].Amount);
-
 
             SetSave(selectedProcess->TileID, 21,0);
-            SDL_DestroyTexture(tiles[selectedProcess->TileID].additionalImage.texture);
-            tiles[selectedProcess->TileID].additional = false;
+            tiles[selectedProcess->TileID].additionalImage.texture = NULL;
+            tiles[selectedProcess->TileID].icon.texture = NULL;
             RemoveProcess(&plist,selectedProcess->ProcessID);
         }
     }
@@ -873,8 +948,8 @@ void OnMouseMove(SDL_Event e)
         {
             if(tiles[index].id != LastTile -> id)
             {
-                SDL_SetTextureColorMod(tiles[index].img.texture,220,220,220);
-                SDL_SetTextureColorMod(LastTile -> img.texture,255,255,255);
+                //SDL_SetTextureColorMod(tiles[index].img.texture,220,220,220);
+                //SDL_SetTextureColorMod(LastTile -> img.texture,255,255,255);
                 LastTile = &tiles[index];
             }
 

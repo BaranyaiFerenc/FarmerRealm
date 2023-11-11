@@ -30,6 +30,52 @@ void RenderParent(SDL_Renderer* renderer, GUI_Panel parent)
     }
 }
 
+void RenderShopPanel(SDL_Renderer* renderer, GUI_Panel *panel,ShopItem *items, int childcount ,int money, int level)
+{
+    SDL_RenderCopy(renderer, panel->panelImage.texture, NULL, &panel->panelImage.destination);
+
+    for(int i = 0; i<5;i++)
+    {
+        SDL_RenderCopy(renderer, panel->children[i].texture, NULL, &panel->children[i].destination);
+    }
+
+    for(int i = 5; i<panel -> childCount && panel -> visible; i+=childcount)
+    {
+        unsigned short int index = (i-5)/childcount;
+        if(money >= items[index].price && level >= items[index].level)
+        {
+            SDL_SetTextureColorMod(panel -> children[i+1].texture,100,255,100); //Ár
+            SDL_SetTextureColorMod(panel -> children[i+2].texture,255,255,255); //Szint
+            SDL_SetTextureColorMod(panel -> children[i-3].texture,255,255,255); //Háttér
+
+            SDL_SetTextureAlphaMod(panel -> children[i-1].texture, 0);
+        }
+        else if(level < items[index].level)
+        {
+            SDL_SetTextureColorMod(panel -> children[i].texture,220,220,220);
+            SDL_SetTextureColorMod(panel -> children[i+2].texture,220,100,100);
+            SDL_SetTextureColorMod(panel -> children[i-3].texture,220,220,220);
+
+            SDL_SetTextureAlphaMod(panel -> children[i-1].texture, 255);
+        }
+        else
+        {
+            SDL_SetTextureColorMod(panel -> children[i+1].texture,255,100,100);
+            SDL_SetTextureColorMod(panel -> children[i+2].texture,255,255,255);
+            SDL_SetTextureColorMod(panel -> children[i-3].texture,255,220,220);
+
+            SDL_SetTextureAlphaMod(panel -> children[i-1].texture, 0);
+        }
+
+        SDL_RenderCopy(renderer, panel->children[i-3].texture, NULL, &panel->children[i-3].destination);
+        SDL_RenderCopy(renderer, panel->children[i+1].texture, NULL, &panel->children[i+1].destination);
+        SDL_RenderCopy(renderer, panel->children[i+2].texture, NULL, &panel->children[i+2].destination);
+        SDL_RenderCopy(renderer, panel->children[i-2].texture, NULL, &panel->children[i-2].destination);
+        SDL_RenderCopy(renderer, panel->children[i].texture, NULL, &panel->children[i].destination);
+        SDL_RenderCopy(renderer, panel->children[i-1].texture, NULL, &panel->children[i-1].destination);
+    }
+}
+
 Vector2 GetUpRightCornerPosition(Vector2 parentPos, Vector2 parentSize, Vector2 objSize)
 {
     int x = parentPos.x+parentSize.x-objSize.x;
@@ -76,11 +122,12 @@ void CreateCraftPanel(SDL_Renderer* renderer,char *title, Vector2 windowSize, GU
     panel -> childCount++;
 }
 
-void ShowAnimatedGUI(SDL_Renderer* renderer, GUI_Panel *panel, int windowSizeY)
+void ShowAnimatedGUI(SDL_Renderer* renderer, GUI_Panel *panel, int windowSizeY, ShopItem *items, int childcount ,int money, int level)
 {
     if(panel -> visible && panel -> panelImage.destination.y == windowSizeY-panel -> panelImage.destination.h)
     {
-        RenderParent(renderer, *panel);
+        //RenderParent(renderer, *panel);
+        RenderShopPanel(renderer,panel,items,childcount,money,level);
     }
     else if(!panel -> visible && panel -> panelImage.destination.y < windowSizeY)
     {
@@ -91,7 +138,8 @@ void ShowAnimatedGUI(SDL_Renderer* renderer, GUI_Panel *panel, int windowSizeY)
             panel -> children[i].destination.y += gPanelSpeed;
         }
 
-        RenderParent(renderer, *panel);
+
+        RenderShopPanel(renderer,panel,items,childcount,money,level);
     }
     else if(panel -> visible && panel -> panelImage.destination.y >= windowSizeY-panel -> panelImage.destination.h)
     {
@@ -101,12 +149,15 @@ void ShowAnimatedGUI(SDL_Renderer* renderer, GUI_Panel *panel, int windowSizeY)
         {
             panel -> children[i].destination.y -= gPanelSpeed;
         }
-        RenderParent(renderer, *panel);
+
+        RenderShopPanel(renderer,panel,items,childcount,money,level);
     }
+
+
 }
 
 void CheckShopItems(GUI_Panel *parent, ShopItem *items, int childcount ,int money, int level)
-{
+{/*
     for(int i = 5; i<parent -> childCount && parent -> visible; i+=childcount)
     {
         unsigned short int index = (i-5)/childcount;
@@ -135,6 +186,33 @@ void CheckShopItems(GUI_Panel *parent, ShopItem *items, int childcount ,int mone
             SDL_SetTextureAlphaMod(parent -> children[i-1].texture, 0);
         }
     }
+
+    unsigned short int index = 1;
+
+    if(money >= items[index].price && level >= items[index].level)
+    {
+        SDL_SetTextureColorMod(parent -> children[i+1].texture,100,255,100); //Ár
+        SDL_SetTextureColorMod(parent -> children[i+2].texture,255,255,255); //Szint
+        SDL_SetTextureColorMod(parent -> children[i-3].texture,255,255,255); //Háttér
+
+        SDL_SetTextureAlphaMod(parent -> children[i-1].texture, 0);
+    }
+    else if(level < items[index].level)
+    {
+        SDL_SetTextureColorMod(parent -> children[i].texture,220,220,220);
+        SDL_SetTextureColorMod(parent -> children[i+2].texture,220,100,100);
+        SDL_SetTextureColorMod(parent -> children[i-3].texture,220,220,220);
+
+        SDL_SetTextureAlphaMod(parent -> children[i-1].texture, 255);
+    }
+    else
+    {
+        SDL_SetTextureColorMod(parent -> children[i+1].texture,255,100,100);
+        SDL_SetTextureColorMod(parent -> children[i+2].texture,255,255,255);
+        SDL_SetTextureColorMod(parent -> children[i-3].texture,255,220,220);
+
+        SDL_SetTextureAlphaMod(parent -> children[i-1].texture, 0);
+    }*/
 }
 
 

@@ -50,6 +50,9 @@ void CreateText(char text[], Color color, int sizeOfText, Vector2 position, SDL_
 void RenderParent(SDL_Renderer* renderer, GUI_Panel parent);
 /*Összegyüjti a gyermek objektumokat és megjeleníti őket*/
 
+void RenderShopPanel(SDL_Renderer* renderer, GUI_Panel *panel,ShopItem *items, int childcount ,int money, int level);
+/*Megjeleníti a vásárló felületeket és megváltoztatja a hozzáférhetés szerint a színeket*/
+
 Vector2 GetUpRightCornerPosition(Vector2 parentPos, Vector2 parentSize, Vector2 objSize);
 Vector2 GetUpLeftCornerPosition(Vector2 parentPos, Vector2 parentSize, Vector2 objSize);
 
@@ -62,7 +65,7 @@ void CreateCraftPanel(SDL_Renderer* renderer,char *title, Vector2 windowSize, GU
 int GetTextLength(char *text);
 /*Visszatér a char[] paraméter hosszával (szükséges a szöveg méretének meghatározásához)*/
 
-void ShowAnimatedGUI(SDL_Renderer* renderer, GUI_Panel *panel, int windowSizeY);
+void ShowAnimatedGUI(SDL_Renderer* renderer, GUI_Panel *panel, int windowSizeY, ShopItem *items, int childcount ,int money, int level);
 /*Kiszámolja és legenerálja az eltűnés/előjövetel animációt*/
 
 void CheckShopItems(GUI_Panel *parent, ShopItem *items, int childcount ,int money, int level);
