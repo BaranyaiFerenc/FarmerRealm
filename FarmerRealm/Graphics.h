@@ -36,7 +36,9 @@ typedef struct Source
 
 typedef enum ImageType {game, gui} ImageType;
 
+/*Forrásképek keresése*/
 SDL_Texture* GetSource(Source *sourceList, char *path, SDL_Renderer *renderer);
+/*Forrásképek betöltése*/
 void LoadSource(Source *sourceList, char *path, SDL_Renderer *renderer);
 
 /*Ablak létrehozása*/

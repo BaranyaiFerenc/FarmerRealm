@@ -29,7 +29,7 @@ typedef struct ProcessList
     int n;
 } ProcessList;
 
-void AddProcess(ProcessList *p_list, Process process);
+Process* AddProcess(ProcessList *p_list, Process process);
 
 void RemoveProcess(ProcessList *p_list, int id);
 

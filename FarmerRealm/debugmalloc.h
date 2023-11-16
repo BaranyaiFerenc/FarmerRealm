@@ -14,13 +14,13 @@ enum {
     /* size of canary in bytes. should be multiple of largest alignment
      * required by any data type (usually 8 or 16) */
     debugmalloc_canary_size = 64,
-    
+
     /* canary byte */
     debugmalloc_canary_char = 'K',
 
     /* hash table size for allocated entries */
     debugmalloc_tablesize = 256,
-    
+
     /* max block size for allocation, can be modified with debugmalloc_max_block_size() */
     debugmalloc_max_block_size_default = 1048576
 };
@@ -262,7 +262,7 @@ static void debugmalloc_dump(void) {
  * ie. allocated block remained. */
 static void debugmalloc_atexit_dump(void) {
     DebugmallocData *instance = debugmalloc_singleton();
-    
+
     if (instance->alloc_count > 0) {
         debugmalloc_log("\n"
                         "********************************************************\n"
@@ -333,7 +333,7 @@ static void *debugmalloc_malloc_full(size_t size, char const *func, char const *
     /* imitate standard malloc: return null if size is zero */
     if (size == 0)
         return NULL;
-    
+
     /* check max size */
     DebugmallocData *instance = debugmalloc_singleton();
     if (size > instance->max_block_size) {
@@ -488,7 +488,7 @@ static DebugmallocData * debugmalloc_create(void) {
  * calls to debugmalloc. Usage is the same, malloc(size)
  * gives the address of a new memory block, free(ptr)
  * deallocates etc.
- * 
+ *
  * If you use this file, make sure that you include this
  * in *ALL* translation units (*.c) of your source. The
  * builtin free() function cannot deallocate a memory block

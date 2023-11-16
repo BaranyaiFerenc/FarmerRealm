@@ -12,12 +12,13 @@
 #include <string.h>
 
 #include "Graphics.h"
+#include "GameElements.h"
 
 
 typedef struct GUI_Panel //Alap GUI panel
 {
     Image panelImage;
-    Image children[30];
+    Image children[70];
 
     int childCount;
 
@@ -37,11 +38,13 @@ typedef struct Canvas
 {
     GUI_Panel buildPanel;
     GUI_Panel plantPanel;
+    GUI_Panel warehousePanel;
     Image buildButton;
     Image plantButton;
     Image infoBox;
     Image moneyText;
     Image levelText;
+    Image levelProgression;
 } Canvas;
 
 void CreateText(char text[], Color color, int sizeOfText, Vector2 position, SDL_Renderer* renderer, TTF_Font *font, Image *img);
@@ -59,7 +62,7 @@ Vector2 GetUpLeftCornerPosition(Vector2 parentPos, Vector2 parentSize, Vector2 o
 bool OverUI(Vector2 mousePos, SDL_Rect obj);
 /*Ellenőrzi hogy a megadott koordináta a megadott interfész elem felett van-e*/
 
-void CreateCraftPanel(SDL_Renderer* renderer,char *title, Vector2 windowSize, GUI_Panel *panel);
+void CreateCraftPanel(SDL_Renderer* renderer,char *title, Vector2 windowSize, Recipe *recipes, int recipeCount, RecipeType type, Item *invetory, int inventoryCount, GUI_Panel *panel, int *recipeAmount);
 /*Létrehozza a "barkácsolás" menü elemeket*/
 
 int GetTextLength(char *text);
@@ -73,4 +76,8 @@ void CheckShopItems(GUI_Panel *parent, ShopItem *items, int childcount ,int mone
 void FormatTime(int t, char *out);
 
 void RenderCanvas(Canvas *canvas, SDL_Renderer *renderer);
+
+void OpenWarehouse(Canvas *canvas, SDL_Renderer *renderer, Item *inventory, int n,TTF_Font *font,int *ids);
+
+void SetParentAlpha(GUI_Panel *parent, int a);
 #endif // GUI_H

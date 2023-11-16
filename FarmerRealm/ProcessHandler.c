@@ -1,10 +1,9 @@
 #include "ProcessHandler.h"
 
-void AddProcess(ProcessList *p_list, Process process)
+Process* AddProcess(ProcessList *p_list, Process process)
 {
     if(p_list == NULL)
         printf("Empty!\n");
-
 
     Process *new_list = (Process*)malloc(sizeof(Process)*(p_list ->n+1));
 
@@ -23,11 +22,20 @@ void AddProcess(ProcessList *p_list, Process process)
     p_list ->l = new_list;
 
     printf("Memory allocated with size of %I64u bite\n",(sizeof(Process)*(p_list ->n)));
+
+    return &p_list->l[p_list->n-1];
 }
 
 void RemoveProcess(ProcessList *p_list, int id)
 {
-    Process *new_list = (Process*)malloc(sizeof(Process)*(p_list ->n-1));
+    int newSize = sizeof(Process)*(p_list ->n-1);
+    /*if(newSize <= 0)
+    {
+        free(p_list->l);
+        printf("Process list freed because low size!\n");
+        return;
+    }*/
+    Process *new_list = (Process*)malloc(newSize);
     int index = 0;
 
     for(int i = 0; i<p_list ->n; i++)

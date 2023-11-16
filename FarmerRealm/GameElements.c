@@ -1,25 +1,48 @@
 #include "GameElements.h"
 
-void AddElementToMatrix(TileMatrix *tileList, Tile tile, int r, int c)
+Tile** CreateMatrix(int xSize, int ySize)
 {
-    //Megállapítjuk hogy létre kell-e hozni új sort a mátrixban?
-    int rowCount = tileList ->row_size > r+1 ? tileList->row_size:r+1;
-    int columnCount = tileList ->column_size > c+1 ? tileList->column_size:c+1;
+    Tile** matrix = (Tile**)malloc(ySize*sizeof(Tile));
 
-    Tile *newMatrix = (Tile*)malloc(sizeof(Tile)*rowCount*columnCount);
-
-    for(int y = 0; y<tileList->row_size; y++)
+    for(int y = 0; y<ySize; y++)
     {
-        for(int x = 0; x<tileList->column_size; x++)
+        matrix[y] = (Tile*)malloc(xSize*sizeof(Tile));
+    }
+
+    return matrix;
+}
+
+Tile* GetTileFromPosition(TileMatrix *matrix, Vector2 position)
+{
+
+
+
+    for(int x = 0; x<matrix->xSize; x++)
+    {
+        for(int y=0; y<matrix->ySize; y++)
         {
-            newMatrix[y*x] = tileList->matrix[x*y];
+            if(MouseOverImage(matrix->matrix[x][y].img.destination, position, 200))
+            {
+                return &matrix->matrix[x][y];
+            }
         }
     }
-    //printf("Matrix created with size of %dx%d\n",rowCount,columnCount);
-    newMatrix[r*rowCount+c] = tile;
+}
 
-    free(tileList->matrix);
-    tileList->matrix = newMatrix;
-    tileList->column_size=columnCount;
-    tileList->row_size = rowCount;
+Tile* GetTileByID(TileMatrix *matrix, int id)
+{
+    int row = id/matrix->ySize;
+    int col = id-row*matrix->ySize;
+    return &matrix->matrix[row][col];
+}
+
+
+void FreeMatrix(TileMatrix *matrix)
+{
+    for(int i = 0; i<matrix->ySize; i++)
+    {
+        free(matrix->matrix[i]);
+    }
+
+    free(matrix->matrix);
 }
