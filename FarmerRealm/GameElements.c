@@ -14,9 +14,6 @@ Tile** CreateMatrix(int xSize, int ySize)
 
 Tile* GetTileFromPosition(TileMatrix *matrix, Vector2 position)
 {
-
-
-
     for(int x = 0; x<matrix->xSize; x++)
     {
         for(int y=0; y<matrix->ySize; y++)
@@ -46,3 +43,5 @@ void FreeMatrix(TileMatrix *matrix)
 
     free(matrix->matrix);
 }
+
+

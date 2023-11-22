@@ -46,14 +46,14 @@ void SetSave(unsigned short int id, unsigned char type, unsigned long long misc)
     //type -> 8 bit
     //misc -> 44 bit
 
-    unsigned long long int full[2500];
+    unsigned long long int full[saveSize];
     GetSave("save.bin",full);
 
     //printf("%I64u\n",misc);
 
     unsigned long long int log = GetBinary(id, type, misc);
     full[id+1] = log;
-
+    printf("Save set to %d\n",id);
 
     FILE *file;
     file = fopen("save.bin","wb");
@@ -76,7 +76,7 @@ void SaveStats(unsigned int level,unsigned int money, unsigned long time)
 
     //WriteOutBin(log);
 
-    unsigned long long int full[2500];
+    unsigned long long int full[saveSize];
     GetSave("save.bin",full);
     full[0] = log;
 

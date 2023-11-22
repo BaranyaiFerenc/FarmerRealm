@@ -65,3 +65,12 @@ Process* GetProcess(ProcessList *p_list, int id)
 
     return NULL;
 }
+
+void ListProcesses(ProcessList *p_list)
+{
+    printf("Active processes:\n");
+    for(int i = 0; i<p_list->n; i++)
+    {
+        printf("\to ID: %d; Type: %d; TileID: %d; Time: %d; Misc.: %d; Done: %s\n", p_list->l[i].ProcessID,p_list->l[i].type,p_list->l[i].TileID,p_list->l[i].t, p_list->l[i].misc,p_list->l[i].done ? "True":"False");
+    }
+}

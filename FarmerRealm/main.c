@@ -18,6 +18,7 @@
 #define d_windowSizeX 1100
 #define d_windowSizeY 750
 #define d_baseSize 200
+#define d_mapSize 2500
 
 
 typedef struct Crafter
@@ -26,17 +27,25 @@ typedef struct Crafter
     Tile *base;
     bool opened;
     GUI_Panel menu;
-    Process* ActiveProcess[3];
+    int ProcessIds[3];
     int RecipeAmount;
     RecipeType type;
 } Crafter;
+
+typedef struct ShopData
+{
+    int actualItem;
+    ShopItem Items[6];
+    unsigned short int ChildCount;
+    unsigned short int ItemCount;
+} ShopData;
 
 
 
 //Irányítás
 void OnLeftMouseDown(SDL_Event e);
 void OnLeftMouseUp(SDL_Event e,Canvas *canvas, Item *AllItem, int ItemCount, int* SelectedTileId, int* SelectInfoAlpha,int *ids);
-void OnMouseMove(SDL_Event e);
+void OnMouseMove(SDL_Event e,Item *AllItem, int ItemCount);
 
 //Színek beállítása
 void ClearColors();
@@ -51,6 +60,10 @@ ShopItem* GetShopItemById(int id, int n, ShopItem *itemList);
 int GetPlantImageId(ShopItem *plant, unsigned long long int TimeWhenDone);
 Item* GetItemByName(char *name, int n, Item *itemList);
 
+
+void AddXP(int amount, Image *levelText);
+void AddMoney(int amount, Image *moneyText);
+
 //Ablak és a renderer
 SDL_Window *window;
 SDL_Renderer *renderer;
@@ -59,10 +72,9 @@ SDL_Renderer *renderer;
 int money = 200;
 int level = 1;
 int xp = 0;
+int nextLimit;
+int remainXP;
 unsigned timer;
-
-int mapSize = 2500;
-//Tile tiles[2500];
 
 Crafter crafters[3];
 
@@ -71,16 +83,17 @@ int actualBuildItem = 0;
 ShopItem Buildings[5];
 unsigned short int BuildChildCount = 6;
 unsigned short int BuildItemCount = 3;
-Image BuildLockImages[3];
 
-char *Undestroyables[20] = {"Windmill","Bakery","Brewery","Shop","Warehouse","Ground",""};
+ShopData BuildingData;
+ShopData PlantingData;
+
+char *Undestroyables[7] = {"Windmill","Bakery","Brewery","Shop","Warehouse","Ground",""};
 
 bool PlantMode = false;
 int actualPlantItem = 0;
 ShopItem Plants[6];
 unsigned short int PlantChildCount = 6;
 unsigned short int PlantItemCount = 6;
-Image PlantLockImages[3];
 
 Tile *LastTile;
 Vector2 lastMousePos;
@@ -96,12 +109,14 @@ TileMatrix matrix;
 Recipe Recipes[20];
 int RecipeCount = 20;
 
+int beehiveTime = 600;
+
 void Init_Map(Vector2 origin)
 {
     FILE *file;
-
+    xp = 0;
     file = fopen("save.bin", "r");
-    int rowSize = sqrt(mapSize);
+    int rowSize = sqrt(d_mapSize);
 
     matrix.xSize = rowSize;
     matrix.ySize = rowSize;
@@ -116,7 +131,7 @@ void Init_Map(Vector2 origin)
 
     if(file != NULL)
     {
-        unsigned long long int saves[2500];
+        unsigned long long int saves[2509];
 
         GetSave("save.bin",saves);
         xp = (saves[0] >> 48);
@@ -139,34 +154,89 @@ void Init_Map(Vector2 origin)
 
                 int index = y+x*rowSize;
                 int type = saves[index+1] << 12 >> 56;
-
-
                 matrix.matrix[x][y].additionalImage.texture = NULL;
                 matrix.matrix[x][y].icon.texture = NULL;
                 matrix.matrix[x][y].arrow = false;
+                matrix.matrix[x][y].process = NULL;
 
                 if(x==millPosition.x && y==millPosition.y)
                 {
                     CreateImage(renderer,"Images/Windmill.png",delta,(Vector2){d_baseSize,d_baseSize}, &matrix.matrix[x][y].img);
                     strcpy(matrix.matrix[x][y].name,"Windmill");
                     crafters[0].base = &matrix.matrix[x][y];
+                    printf("Windmill created\n");
+
+                    for(int i = 1; i<=3;i++)
+                    {
+                        int type = saves[d_mapSize+i] << 12 >> 56;
+
+                        if(type != 0)
+                        {
+                            unsigned long long int timeToDone = (saves[d_mapSize+i] << 20 >> 28);
+                            unsigned char recipe = saves[d_mapSize+i] << 56 >> 56;
+
+                            if(timeToDone != 0 && type != 0)
+                            {
+                                Process p = {index*i,Craft,index,timeToDone,recipe};
+                                crafters[0].ProcessIds[i-1] = AddProcess(&plist, p)->ProcessID;
+                            }
+                        }
+                    }
+
                 }
                 else if(x==bakeryPosition.x && y==bakeryPosition.y)
                 {
                     CreateImage(renderer,"Images/Bakery.png",delta,(Vector2){d_baseSize,d_baseSize}, &matrix.matrix[x][y].img);
                     strcpy(matrix.matrix[x][y].name,"Bakery");
                     crafters[2].base = &matrix.matrix[x][y];
+                    printf("Bakery created\n");
+
+                    for(int i = 1; i<=3;i++)
+                    {
+                        int type = saves[d_mapSize+6+i] << 12 >> 56;
+
+                        if(type != 0)
+                        {
+                            unsigned long long int timeToDone = (saves[d_mapSize+6+i] << 20 >> 28);
+                            unsigned char recipe = saves[d_mapSize+6+i] << 56 >> 56;
+
+                            if(timeToDone != 0 && type != 0)
+                            {
+                                Process p = {index*i,Craft,index,timeToDone,recipe};
+                                crafters[2].ProcessIds[i-1] = AddProcess(&plist, p)->ProcessID;
+                            }
+                        }
+                    }
                 }
                 else if(x==breweryPosition.x && y==breweryPosition.y)
                 {
                     CreateImage(renderer,"Images/Brewery.png",delta,(Vector2){d_baseSize,d_baseSize}, &matrix.matrix[x][y].img);
                     strcpy(matrix.matrix[x][y].name,"Brewery");
                     crafters[1].base = &matrix.matrix[x][y];
+                    printf("Brewery created\n");
+
+                    for(int i = 1; i<=3;i++)
+                    {
+                        int type = saves[d_mapSize+3+i] << 12 >> 56;
+
+                        if(type != 0)
+                        {
+                            unsigned long long int timeToDone = (saves[d_mapSize+3+i] << 20 >> 28);
+                            unsigned char recipe = saves[d_mapSize+3+i] << 56 >> 56;
+
+                            if(timeToDone != 0 && type != 0)
+                            {
+                                Process p = {index*i,Craft,index,timeToDone,recipe};
+                                crafters[1].ProcessIds[i-1] = AddProcess(&plist, p)->ProcessID;
+                            }
+                        }
+                    }
                 }
                 else if(x==warehousePosition.x && y==warehousePosition.y)
                 {
                     CreateImage(renderer,"Images/Warehouse.png",delta,(Vector2){d_baseSize,d_baseSize}, &matrix.matrix[x][y].img);
                     strcpy(matrix.matrix[x][y].name,"Warehouse");
+                    printf("Warehouse created\n");
                 }
                 else
                 {
@@ -189,7 +259,7 @@ void Init_Map(Vector2 origin)
 
                         printf("\t\t+ %I64u sec is when bulding with type %d is done\n", timeToDone, buildingType);
                         Process p = {index,Building,index,timeToDone,buildingType};
-                        AddProcess(&plist, p);
+                        matrix.matrix[x][y].process = AddProcess(&plist, p);
                     }
                     else if(type == 21)
                     {
@@ -202,12 +272,39 @@ void Init_Map(Vector2 origin)
                         {
                             printf("\t\t+ %I64u sec is when plant with type %d is done\n", timeToDone, plantType);
                             Process p = {index,Plant,index,timeToDone,plantType};
-                            AddProcess(&plist, p);
+                            matrix.matrix[x][y].process = AddProcess(&plist, p);
 
                             ShopItem *plant = GetShopItemById(plantType, PlantItemCount, Plants);
                             char pathToPlant[200];
                             sprintf(pathToPlant, "Images/Plants/%s/%s4.png",plant->name,plant->name);
                             CreateImage(renderer, pathToPlant,delta,(Vector2){d_baseSize,d_baseSize}, &matrix.matrix[x][y].additionalImage);
+                        }
+                    }
+                    else if(type == 22)
+                    {
+                        CreateImage(renderer,"Images/Beehive.png",delta,(Vector2){d_baseSize,d_baseSize}, &matrix.matrix[x][y].img);
+                        strcpy(matrix.matrix[x][y].name,"Beehive");
+                        unsigned long long int timeToDone = (saves[index+1] << 20 >> 28);
+                        unsigned char productType = saves[index+1] << 56 >> 56;
+
+                        if(timeToDone != 0)
+                        {
+                            printf("\t\t+ %I64u sec is when looped production with type %d is done\n", timeToDone, productType);
+                            Process p = {index,Loop,index,timeToDone,productType};
+                            matrix.matrix[x][y].process = AddProcess(&plist, p);
+                        }
+                        else
+                        {
+                            timeToDone = timer/1000+beehiveTime;
+                            printf("Beehive looped production started (%d)\n",timeToDone);
+                            Process p = {index,Loop,index,timeToDone,6};
+                            matrix.matrix[x][y].process = AddProcess(&plist, p);
+
+                            unsigned long long int misc = timeToDone;
+                            misc <<= 8;
+                            misc += 6;
+
+                            SetSave(index, 22, misc);
                         }
                     }
                     else if(type == 23)
@@ -221,7 +318,7 @@ void Init_Map(Vector2 origin)
                         {
                             printf("\t\t+ %I64u sec is when plant with type %d is done\n", timeToDone, plantType);
                             Process p = {index,Plant,index,timeToDone,plantType};
-                            AddProcess(&plist, p);
+                            matrix.matrix[x][y].process = AddProcess(&plist, p);
                         }
                     }
                     else
@@ -244,6 +341,7 @@ void Init_Map(Vector2 origin)
                         {
                             CreateImage(renderer,"Images/Error.png",delta,(Vector2){d_baseSize,d_baseSize}, &matrix.matrix[x][y].img);
                             strcpy(matrix.matrix[x][y].name,"Error");
+                            printf("Error while loading tile(%d:%d) with type: %d\n",x,y,type);
                             placed = true;
                         }
                     }
@@ -439,6 +537,9 @@ void Init_GUI(Canvas* canvas)
     CreateImage(renderer, "Images/GUI/Progression.png",(Vector2){844,85},(Vector2){215,29}, &canvas->levelProgression);
     SDL_SetTextureAlphaMod(canvas->levelProgression.texture, 100);
 
+    //Pénz és szint szöveg frissítése
+    AddMoney(0, &canvas->moneyText);
+    AddXP(0, &canvas->levelText);
 }
 
 
@@ -471,11 +572,21 @@ int main(int argc, char *argv[])
     GetInventory(AllItem, ItemCount);
 
     //Az építhető épületek deklarálása (név, ár, szint, idő, azonosító)
-    Buildings[0] = (ShopItem){"Field",100,1,10,21};
-    Buildings[1] = (ShopItem){"Beehive",1000,5,60,22};
-    Buildings[2] = (ShopItem){"Greenhouse",5000,10,300,23};
-    Buildings[3] = (ShopItem){"Ground",100,1,60,10}; //Megsemmisítés gombhoz
+    Buildings[0] = (ShopItem){"Field",30,1,10,21};
+    Buildings[1] = (ShopItem){"Beehive",500,5,60,22};
+    Buildings[2] = (ShopItem){"Greenhouse",2000,10,300,23};
+    Buildings[3] = (ShopItem){"Ground",10,1,60,10}; //Megsemmisítés gombhoz
     Buildings[4] = (ShopItem){"ConstructionSite",0,1,60,1}; //Építés alatt álló épületek
+
+    //Az építhető épületek deklarálása (név, ár, szint, idő, azonosító)
+    /*
+    BuildingData.Items[0] = (ShopItem){"Field",30,1,10,21};
+    BuildingData.Items[1] = (ShopItem){"Beehive",500,5,60,22};
+    BuildingData.Items[2] = (ShopItem){"Greenhouse",2000,10,300,23};
+    BuildingData.Items[3] = (ShopItem){"Ground",10,1,60,10}; //Megsemmisítés gombhoz
+    BuildingData.Items[4] = (ShopItem){"ConstructionSite",0,1,60,1}; //Építés alatt álló épületek
+
+    BuildingData.ItemCount = 5;*/
 
     //Ültethető növények deklarálása (név, ár, szint, idő, azonosító)
     Plants[0] = (ShopItem){"Wheat",1,1,30,101};
@@ -508,13 +619,12 @@ int main(int argc, char *argv[])
 
 
     Init_Map(origin);
-    printf("Map loaded...\n");
-
 
     LastTile = &matrix.matrix[0][0];
 
     Canvas canvas;
     Init_GUI(&canvas);
+
 
     //A "barkács" épületekhez tartozó menü létrehozása
     CreateCraftPanel(renderer,"Windmill", (Vector2){d_windowSizeX,d_windowSizeY},Recipes, RecipeCount,Windmill,AllItem,ItemCount, &crafters[0].menu, &crafters[0].RecipeAmount);
@@ -566,23 +676,27 @@ int main(int argc, char *argv[])
                         OnLeftMouseUp(event, &canvas, AllItem, ItemCount,&SelectedTileId,&SelectInfoAlpha, warehouseIDs);
                     break;
                 case SDL_MOUSEMOTION:
-                    OnMouseMove(event);
+                    OnMouseMove(event, AllItem, ItemCount);
                     break;
                 case SDL_KEYDOWN:
                     if(event.key.keysym.sym == SDLK_UP)
-                        level++;
+                        AddXP(level, &canvas.levelText);
                     if(event.key.keysym.sym == SDLK_DOWN && level > 1)
-                        level--;
+                        AddXP(-level, &canvas.levelText);
                     if(event.key.keysym.sym == SDLK_RIGHT)
-                        money+=1000;
+                        AddMoney(1000, &canvas.moneyText);
                     if(event.key.keysym.sym == SDLK_LEFT && money > 1000)
-                        money-=1000;
+                        AddMoney(-1000, &canvas.moneyText);
+                    if(event.key.keysym.sym == SDLK_p)
+                        ListProcesses(&plist);
                     if(event.key.keysym.sym == SDLK_i)
                     {
                         printf("Actual inventory:\n");
                         for(int i = 0; i<ItemCount;i++)
                             printf("\to %s: %d\n",AllItem[i].Name, AllItem[i].Amount);
                     }
+                    if(event.key.keysym.sym == SDLK_t)
+                        printf("Actual game time: %u\n",timer);
 
             }
         }
@@ -595,11 +709,12 @@ int main(int argc, char *argv[])
         delta_time = now - timer;
         timer += delta_time;
 
-        //XP és szint közötti átváltás
-        if(xp >= 100 && level < 500)
+
+        //Biztonsági mentés percenként
+        if(timer/1000 % 60)
         {
-            xp -= 100;
-            level++;
+            SaveStats(xp, money, ((int)timer/1000));
+            SaveInventory(AllItem, ItemCount);
         }
 
         //Futó folyamatok ellenőrzése
@@ -638,6 +753,22 @@ int main(int argc, char *argv[])
                 done = true;
             }
 
+            if(!done && plist.l[i].type == Loop && plist.l[i].t <= now/1000 && !plist.l[i].done)
+            {
+                plist.l[i].done = true;
+                printf("Ended loop production...\n");
+
+                Item *product = &AllItem[plist.l[i].misc];
+
+                char path[100];
+                sprintf(path,"Images/Icons/%s.png",product->Name);
+
+                CreateImage(renderer,path, (Vector2){100,100}, (Vector2){50,50}, &actual->icon);
+
+                printf("Looped production on %s(%d:%d):%s ended\n",actual->name,actual->coordinates.x,actual->coordinates.y,product->Name);
+                done = true;
+            }
+
             if(!done && plist.l[i].type == Building && plist.l[i].t <= now/1000)
             {
                 int id = 0;
@@ -659,15 +790,27 @@ int main(int argc, char *argv[])
 
                 printf("Building of %s (%d) is done\n",Buildings[id].name,Buildings[id].ID);
 
+                Tile *tile = GetTileByID(&matrix, plist.l[i].TileID);
+
+                tile->process = NULL;
+
+                RemoveProcess(&plist, plist.l[i].ProcessID);
+
                 //Ha méhkas épült meg akkor elindítja automatikusan benne a termelést
                 if(strcmp(Buildings[id].name, "Beehive") == 0)
-                {/*
-                    Process p = {plist.l[i].TileID,Craft,plist.l[i].TileID,t,4};
-                    AddProcess(plist);*/
+                {
+                    Process p = {tile->id,Loop,tile->id,timer/1000+beehiveTime,6};
+                    tile->process = AddProcess(&plist, p);
+
+
+                    unsigned long long int misc = timer/1000+beehiveTime;
+                    misc <<= 8;
+                    misc += 6;
+
+                    SetSave(tile->id, 22,misc);
                     printf("Honey production started\n");
                 }
 
-                RemoveProcess(&plist, plist.l[i].ProcessID);
                 done = true;
 
             }
@@ -692,12 +835,13 @@ int main(int argc, char *argv[])
                 int slotId = (plist.l[i].ProcessID/plist.l[i].TileID)-1;
                 printf("\to Crafter slot id: %d\n",slotId);
 
-                actualCrafter ->ActiveProcess[slotId] = NULL;
+                actualCrafter ->ProcessIds[slotId] = NULL;
 
                 RemoveProcess(&plist, plist.l[i].ProcessID);
 
                 done = true;
             }
+
         }
 
 
@@ -730,26 +874,14 @@ int main(int argc, char *argv[])
             SelectInfoAlpha = 0;
 
 
-        //Pénz és szint megjelenítése
-        char intToString[20];
-
-        sprintf(intToString, "$%d", money);
-        SDL_DestroyTexture(&canvas.moneyText.texture);
-        CreateText(intToString, (Color){80,52,30}, 50, (Vector2){880,23}, renderer, font, &canvas.moneyText);
-
-        sprintf(intToString, "Level %d", level);
-        SDL_DestroyTexture(&canvas.levelText.texture);
-        CreateText(intToString, (Color){80,52,30}, 30, (Vector2){880,85}, renderer, font, &canvas.levelText);
-
-
         //Mód jelző feliratok létrehozása
         if(PlantMode && modeSign.texture == NULL)
         {
-            CreateText("Planting...",(Color){255,52,30}, 50, (Vector2){d_windowSizeX/2-100, 30}, renderer,font,&modeSign);
+            CreateText("Planting...",(Color){150, 10, 0}, 50, (Vector2){d_windowSizeX/2-100, 30}, renderer,font,&modeSign);
         }
         else if(BuildMode && modeSign.texture == NULL)
         {
-            CreateText("Building...",(Color){255,52,30}, 50, (Vector2){d_windowSizeX/2-100, 30}, renderer,font,&modeSign);
+            CreateText("Building...",(Color){150, 10, 0}, 50, (Vector2){d_windowSizeX/2-100, 30}, renderer,font,&modeSign);
         }
         else if((!BuildMode && !PlantMode) && modeSign.texture != NULL)
         {
@@ -758,6 +890,40 @@ int main(int argc, char *argv[])
         }
 
         SDL_RenderClear(renderer);
+
+        //"Barkács" menük megjelenítése
+        for(int i = 0; i<3; i++)
+        {
+            if(crafters[i].opened)
+            {
+                for(int x = 0; x<3;x++)
+                {
+                    Vector2 pos = (Vector2){crafters[i].menu.children[2+2*x].destination.x,crafters[i].menu.children[2+2*x].destination.y};
+                    if(crafters[i].ProcessIds[x] != NULL)
+                    {
+                        Process *proc = GetProcess(&plist, crafters[i].ProcessIds[x]);
+                        unsigned int timeLeft = (proc->t-(timer/1000));
+                        char timetext[40];
+                        FormatTime(timeLeft*1000,timetext);
+                        SDL_DestroyTexture(crafters[i].menu.children[2+2*x].texture);
+                        CreateText(timetext, (Color){255,255,255}, 20, pos, renderer, font, &crafters[i].menu.children[2+2*x]);
+
+                        Item *item = &AllItem[Recipes[proc->misc].resultId];
+
+                        sprintf(pathToIcon, "Images/Icons/%s.png",item->Name);
+                        pos.x -= 40;
+                        pos.y -= 15;
+                        CreateImage(renderer,pathToIcon, pos, (Vector2){40,40}, &crafters[i].menu.children[2+2*x+1]);
+                    }
+                    else
+                    {
+                        SDL_DestroyTexture(crafters[i].menu.children[2+2*x].texture);
+                        CreateText("--Empty--", (Color){128,128,128}, 20, pos, renderer, font, &crafters[i].menu.children[2+2*x]);
+                        crafters[i].menu.children[2+2*x+1].texture = NULL;
+                    }
+                }
+            }
+        }
 
         //Pulzáló képek méretének kiszámítása
         iconSize += delta_time*0.05*(grow?1:-1);
@@ -795,17 +961,32 @@ int main(int argc, char *argv[])
 
                     SDL_RenderCopy(renderer, matrix.matrix[x][y].icon.texture, NULL, &matrix.matrix[x][y].icon.destination);
 
-                    if(matrix.matrix[x][y].arrow && ((!PlantMode && !BuildMode) || (PlantMode && matrix.matrix[x][y].additionalImage.texture != NULL)))
+                    if(matrix.matrix[x][y].arrow != NULL && ((!PlantMode && !BuildMode) || (PlantMode && matrix.matrix[x][y].process != NULL)))
                     {
                         matrix.matrix[x][y].icon.texture = NULL;
                         matrix.matrix[x][y].arrow = false;
                     }
 
                 }
-                else if(matrix.matrix[x][y].icon.texture == NULL && ((BuildMode && strcmp(matrix.matrix[x][y].name, "Ground") == 0) || (PlantMode && (strcmp(matrix.matrix[x][y].name, "Greenhouse") == 0 || strcmp(matrix.matrix[x][y].name, "Field") == 0) && GetProcess(&plist,matrix.matrix[x][y].id) == NULL)))
+                else if(matrix.matrix[x][y].icon.texture == NULL)
                 {
-                    CreateImage(renderer, "Images/GUI/Arrow.png", (Vector2){matrix.matrix[x][y].img.destination.x,matrix.matrix[x][y].img.destination.y+10},(Vector2){150,150}, &matrix.matrix[x][y].icon);
-                    matrix.matrix[x][y].arrow = true;
+                    bool build =BuildMode && strcmp(matrix.matrix[x][y].name, "Ground") == 0 && Buildings[actualBuildItem].ID != 10;
+                    bool plant = PlantMode && matrix.matrix[x][y].process == NULL && (strcmp(matrix.matrix[x][y].name, "Greenhouse") == 0 || strcmp(matrix.matrix[x][y].name, "Field") == 0);
+                    bool destroy = BuildMode && Buildings[actualBuildItem].ID == 10;
+
+                    for(int i = 0; i<6; i++)
+                    {
+                        if(strcmp(Undestroyables[i], matrix.matrix[x][y].name) == 0)
+                        {
+                            destroy = false;
+                        }
+                    }
+
+                    if(plant || build || destroy)
+                    {
+                        CreateImage(renderer, "Images/GUI/Arrow.png", (Vector2){matrix.matrix[x][y].img.destination.x,matrix.matrix[x][y].img.destination.y+10},(Vector2){150,150}, &matrix.matrix[x][y].icon);
+                        matrix.matrix[x][y].arrow = true;
+                    }
                 }
             }
         }
@@ -821,7 +1002,7 @@ int main(int argc, char *argv[])
         RenderCanvas(&canvas, renderer);
 
         //Szint léptékének kiszámolása
-        canvas.levelProgression.destination.w = 215.0*(double)xp/100.0;
+        canvas.levelProgression.destination.w = 215.0*(double)remainXP/nextLimit;
         SDL_RenderCopy(renderer, canvas.levelProgression.texture, NULL, &canvas.levelProgression.destination);
 
 
@@ -840,39 +1021,9 @@ int main(int argc, char *argv[])
         //Romboló gomb külön kerül megjelenítésre mivel ez nem hasonlít az ültető panel elemeihez így nem szabványos
         SDL_RenderCopy(renderer, canvas.buildPanel.children[canvas.buildPanel.childCount-1].texture,NULL,&canvas.buildPanel.children[canvas.buildPanel.childCount-1].destination);
 
-        //"Barkács" menük megjelenítése
         for(int i = 0; i<3; i++)
-        {
             if(crafters[i].opened)
-            {
-                for(int x = 0; x<3;x++)
-                {
-                    Vector2 pos = (Vector2){crafters[i].menu.children[2+2*x].destination.x,crafters[i].menu.children[2+2*x].destination.y};
-                    if(crafters[i].ActiveProcess[x] != NULL)
-                    {
-                        int timeLeft = (crafters[i].ActiveProcess[x]->t-(timer/1000));
-                        char timetext[40];
-                        FormatTime(timeLeft*1000,timetext);
-                        printf("Active process[0] time = %d\n",timeLeft);
-                        SDL_DestroyTexture(crafters[i].menu.children[2+2*x].texture);
-                        CreateText(timetext, (Color){255,255,255}, 20, pos, renderer, font, &crafters[i].menu.children[2+2*x]);
-
-                        Item *item = &AllItem[Recipes[crafters[i].ActiveProcess[x]->misc].resultId];
-                        sprintf(pathToIcon, "Images/Icons/%s.png",item->Name);
-                        pos.x -= 40;
-                        pos.y -= 15;
-                        CreateImage(renderer,pathToIcon, pos, (Vector2){40,40}, &crafters[i].menu.children[2+2*x+1]);
-                    }
-                    else
-                    {
-                        SDL_DestroyTexture(crafters[i].menu.children[2+2*x].texture);
-                        CreateText("--Empty--", (Color){128,128,128}, 20, pos, renderer, font, &crafters[i].menu.children[2+2*x]);
-                        crafters[i].menu.children[2+2*x+1].texture = NULL;
-                    }
-                }
                 RenderParent(renderer, crafters[i].menu);
-            }
-        }
 
         SDL_RenderPresent(renderer);
     }
@@ -882,7 +1033,7 @@ int main(int argc, char *argv[])
     FreeMatrix(&matrix);
 
     //Adatok mentése
-    SaveStats(((level-1)*100)+xp, money, ((int)timer/1000));
+    SaveStats(xp, money, ((int)timer/1000));
     SaveInventory(AllItem, ItemCount);
     printf("Saving...\n");
 
@@ -912,6 +1063,7 @@ void OnLeftMouseDown(SDL_Event e)
 
     SDL_SetTextureColorMod(LastTile -> img.texture,200,200,200);
 }
+
 
 void OnLeftMouseUp(SDL_Event e,Canvas *canvas, Item *AllItem, int ItemCount, int* SelectedTileId, int* SelectInfoAlpha, int* ids)
 {
@@ -982,33 +1134,48 @@ void OnLeftMouseUp(SDL_Event e,Canvas *canvas, Item *AllItem, int ItemCount, int
                 return;
             }
 
-            AllItem[toMake->itemIds[0]].Amount -= toMake->itemAmounts[0];
-
-            if(toMake->itemIds[1] != NULL)
-                AllItem[toMake->itemIds[1]].Amount -= toMake->itemAmounts[1];
-
-            printf("Recipe selected: %s with index of %d\n",AllItem[possibles[indexToItem]->resultId].Name, indexToItem);
-
             int slotID = 0;
             bool finded = false;
 
             for(int i = 0; i<3 && !finded; i++)
             {
-                if(crafters[crafterID].ActiveProcess[i] == NULL)
+                if(crafters[crafterID].ProcessIds[i] == NULL)
                 {
                     slotID = i;
                     finded = true;
                 }
             }
 
+            if(!finded)
+            {
+                printf("No more slot\n");
+            }
 
-            unsigned long long int t = (timer/1000)+toMake->t;
+            AllItem[toMake->itemIds[0]].Amount -= toMake->itemAmounts[0];
 
-            Process process = {.ProcessID = crafters[crafterID].base->id*(slotID+1), .type = Craft, .TileID = crafters[crafterID].base->id, .t=t, .misc = toMake->id, .done=false};
+            if(toMake->itemIds[1] != NULL)
+                AllItem[toMake->itemIds[1]].Amount -= toMake->itemAmounts[1];
 
-            Process *added = AddProcess(&plist, process);
 
-            crafters[crafterID].ActiveProcess[slotID] = added;
+            printf("Recipe selected: %s with index of %d to slot %d\n",AllItem[possibles[indexToItem]->resultId].Name, indexToItem, slotID);
+
+            unsigned long long int timeToDone = (timer/1000)+toMake->t;
+
+            Process process = {.ProcessID = crafters[crafterID].base->id*(slotID+1), .type = Craft, .TileID = crafters[crafterID].base->id, .t=timeToDone, .misc = toMake->id, .done=false};
+
+            AddProcess(&plist, process);
+
+            crafters[crafterID].ProcessIds[slotID] = process.ProcessID;
+
+            int modId = d_mapSize+(crafterID*3)+slotID;
+
+            unsigned long long int misc = timeToDone;
+            misc <<= 8;
+            misc += toMake->id;
+
+            SetSave(modId, 125+crafterID, misc);
+
+            printf("Crafting added: ID: %d; Type: %d; TileID: %d; Time: %d; Misc.: %d; Done: %s\n", process.ProcessID,process.type,process.TileID,process.t, process.misc,process.done ? "True":"False");
         }
 
         //Építkezés menü elemeinek kiválasztása
@@ -1071,16 +1238,22 @@ void OnLeftMouseUp(SDL_Event e,Canvas *canvas, Item *AllItem, int ItemCount, int
             return;
 
         //"Barkács" menük megnyitása/bezárása
-        for(int i = 0; i<3 && !canvas->warehousePanel.visible; i++)
+        bool opened = false;
+        for(int i = 0; i<3 && !canvas->warehousePanel.visible && !BuildMode && !PlantMode; i++)
+            if(crafters[i].opened)
+                opened = true;
+
+
+        for(int i = 0; i<3; i++)
         {
             if(OverUI((Vector2){e.motion.x,e.motion.y}, crafters[i].menu.children[0].destination) && crafters[i].opened)
             {
                 crafters[i].opened = false;
             }
-            else if(strcmp(LastTile -> name, crafters[i].name) == 0 && !crafters[i].opened && !BuildMode)
+            else if(strcmp(LastTile -> name, crafters[i].name) == 0 && !crafters[i].opened && !opened && !canvas->warehousePanel.visible && !BuildMode && !PlantMode)
             {
                 crafters[i].opened = true;
-//                LastTile = &tiles[0];
+                LastTile = &matrix.matrix[0][0];
 
                 canvas->plantPanel.visible = false;
                 canvas->buildPanel.visible = false;
@@ -1108,7 +1281,8 @@ void OnLeftMouseUp(SDL_Event e,Canvas *canvas, Item *AllItem, int ItemCount, int
                 {
                     clicked = true;
                     AllItem[ids[index]].Amount--;
-                    money+= AllItem[ids[index]].Price;
+
+                    AddMoney(AllItem[ids[index]].Price, &canvas->moneyText);
                     OpenWarehouse(canvas, renderer, AllItem, ItemCount, font,ids);
                 }
                 index++;
@@ -1137,13 +1311,14 @@ void OnLeftMouseUp(SDL_Event e,Canvas *canvas, Item *AllItem, int ItemCount, int
 
         if(BuildMode && (strcmp(LastTile -> name, "Ground") == 0 || strcmp(Buildings[actualBuildItem].name, "Ground") == 0))
         {
-            money-= Buildings[actualBuildItem].price;
+
+            AddMoney(-Buildings[actualBuildItem].price, &canvas->moneyText);
 
             unsigned int id = LastTile->id;
             unsigned long long int t = (timer/1000)+Buildings[actualBuildItem].time;
 
             Process p = {id,Building,id,t,Buildings[actualBuildItem].ID};
-            AddProcess(&plist,p);
+            LastTile->process = AddProcess(&plist,p);
 
             Vector2 position = {LastTile->img.destination.x,LastTile->img.destination.y};
 
@@ -1163,16 +1338,16 @@ void OnLeftMouseUp(SDL_Event e,Canvas *canvas, Item *AllItem, int ItemCount, int
             printf("%s(%d) building started (%d sec)\n",Buildings[actualBuildItem].name,Buildings[actualBuildItem].ID,Buildings[actualBuildItem].time);
         }
 
-        if(PlantMode && (strcmp(LastTile -> name, "Field") == 0 || strcmp(LastTile -> name, "Greenhouse") == 0))
+        if(PlantMode && (strcmp(LastTile -> name, "Field") == 0 || strcmp(LastTile -> name, "Greenhouse") == 0) && LastTile->process == NULL)
         {
             bool greenhouse = strcmp(LastTile->name,"Greenhouse") == 0;
-            money -= Plants[actualPlantItem].price;
+            AddMoney(-Plants[actualPlantItem].price, &canvas->moneyText);
 
             unsigned int id = LastTile->id;
             unsigned long long int t = (timer/1000)+(Plants[actualPlantItem].time/(greenhouse?3:1));
 
             Process p = {id,Plant,id,t,Plants[actualPlantItem].ID};
-            AddProcess(&plist,p);
+            LastTile->process = AddProcess(&plist,p);
 
             unsigned long long int misc = t;
             misc <<= 8;
@@ -1180,30 +1355,60 @@ void OnLeftMouseUp(SDL_Event e,Canvas *canvas, Item *AllItem, int ItemCount, int
 
             SetSave(id,strcmp(LastTile->name,"Field") == 0 ? 21:23,misc);
 
+            if(Plants[actualPlantItem].price > money)
+                PlantMode = false;
+
             printf("%s placed on field (%d:%d)\n",Plants[actualPlantItem].name, LastTile ->coordinates.x, LastTile ->coordinates.y);
         }
 
         Process *selectedProcess = GetProcess(&plist, LastTile->id);
         if(selectedProcess != NULL && selectedProcess->t < timer/1000)
         {
-            ShopItem *plant = GetShopItemById(selectedProcess->misc,PlantItemCount, Plants);
-            printf("Product (%s) is done\n",plant->name);
-            Item *item = GetItemByName(plant->name, ItemCount, AllItem);
-            item->Amount++;
-
-
-            SetSave(selectedProcess->TileID, strcmp(LastTile->name,"Field") == 0 ? 21:23,0);
+            Item *item;
             Tile *actual = GetTileByID(&matrix, selectedProcess->TileID);
+            if(selectedProcess->type == Plant)
+            {
+                ShopItem *plant = GetShopItemById(selectedProcess->misc,PlantItemCount, Plants);
+                printf("Product (%s) is done\n",plant->name);
+                item = GetItemByName(plant->name, ItemCount, AllItem);
+                item->Amount++;
+
+                SetSave(selectedProcess->TileID, strcmp(LastTile->name,"Field") == 0 ? 21:23,0);
+
+                RemoveProcess(&plist,selectedProcess->ProcessID);
+                LastTile->process = NULL;
+            }
+            else if(selectedProcess->type == Loop)
+            {
+                item = &AllItem[selectedProcess->misc];
+                item->Amount++;
+                printf("Product (%s) is done\n",item->Name);
+                RemoveProcess(&plist,selectedProcess->ProcessID);
+
+                long long int timeToDone = timer/1000+beehiveTime;
+
+                printf("Beehive looped production started (%d)\n",timeToDone);
+                Process p = {actual ->id,Loop,actual ->id,timeToDone,6};
+                actual -> process = AddProcess(&plist, p);
+
+
+                unsigned long long int misc = timeToDone;
+                misc <<= 8;
+                misc += 6;
+
+                SetSave(actual->id, 22,misc);
+            }
+
             actual->additionalImage.texture = NULL;
             actual->icon.texture = NULL;
-            RemoveProcess(&plist,selectedProcess->ProcessID);
 
-            xp += item->Price;
+
+            AddXP(item->Price, &canvas->levelText);
         }
     }
 }
 
-void OnMouseMove(SDL_Event e)
+void OnMouseMove(SDL_Event e,Item *AllItem, int ItemCount)
 {
     //Ha bármilyen panel meg van nyitva akkor kilép
 
@@ -1224,8 +1429,6 @@ void OnMouseMove(SDL_Event e)
             matrix.matrix[x][y].additionalImage.destination.y = (e.motion.y-matrix.matrix[x][y].positionToMouse.y);
         }
     }
-
-    //LastTile = GetTileFromPosition(&matrix, (Vector2){e.motion.x,e.motion.y});
 }
 
 //Az aktuális növény képének kiszámolása a hátralévő időből
@@ -1259,4 +1462,35 @@ Item* GetItemByName(char *name, int n, Item *itemList)
     }
 
     return NULL;
+}
+
+
+void AddMoney(int amount, Image *moneyText)
+{
+    money += amount;
+    char intToString[20];
+
+    sprintf(intToString, "$%d", money);
+    SDL_DestroyTexture(moneyText->texture);
+    CreateText(intToString, (Color){80,52,30}, 50, (Vector2){880,23}, renderer, font, moneyText);
+}
+
+void AddXP(int amount, Image *levelText)
+{
+    printf("Added xp\n");
+    xp+=amount;
+    printf("All xp=%d\n",xp);
+    nextLimit = 10;
+    remainXP = xp;
+
+    for(level = 1; remainXP >= nextLimit; level++)
+    {
+        remainXP-= nextLimit;
+        nextLimit += (level-1)*10;
+    }
+
+    char intToString[20];
+    sprintf(intToString, "Level %d", level);
+    SDL_DestroyTexture(levelText->texture);
+    CreateText(intToString, (Color){80,52,30}, 30, (Vector2){880,85}, renderer, font, levelText);
 }

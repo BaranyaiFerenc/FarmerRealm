@@ -1,6 +1,8 @@
 #ifndef FILEMANAGER
 #define FILEMANAGER
 
+#define saveSize 2509
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

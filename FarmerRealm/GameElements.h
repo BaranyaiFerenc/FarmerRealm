@@ -2,6 +2,7 @@
 #define GAMEELEMENTS_H
 
 #include "Graphics.h"
+#include "ProcessHandler.h"
 #include "debugmalloc.h"
 
 typedef struct Tile //Alap csempe struktúra ezekre épül a játék
@@ -13,7 +14,7 @@ typedef struct Tile //Alap csempe struktúra ezekre épül a játék
     Image img;
     Image additionalImage;
     Image icon;
-
+    Process *process;
     bool arrow;
 } Tile;
 

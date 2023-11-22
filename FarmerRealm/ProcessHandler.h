@@ -8,7 +8,7 @@
 
 typedef enum ProcessType
 {
-    Building, Plant,Craft
+    Building, Plant,Craft, Loop
 } ProcessType;
 
 typedef struct Process
@@ -34,5 +34,7 @@ Process* AddProcess(ProcessList *p_list, Process process);
 void RemoveProcess(ProcessList *p_list, int id);
 
 Process* GetProcess(ProcessList *p_list, int id);
+
+void ListProcesses(ProcessList *p_list);
 
 #endif // PROCESSHANDLER
