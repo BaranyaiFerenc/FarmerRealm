@@ -50,12 +50,25 @@ typedef struct Recipe
     unsigned int id;
 } Recipe;
 
+typedef struct ArrayData
+{
+    void *arr;
+    int n;
+} ArrayData;
+
 Tile** CreateMatrix(int xSize, int ySize);
+/*Mátrix létrehozása*/
 
 void FreeMatrix(TileMatrix *matrix);
+/*Mátrix felszabadítása*/
 
 Tile* GetTileFromPosition(TileMatrix *matrix, Vector2 position);
+/*Keresés a mátrixban pozíció alapján*/
 
 Tile* GetTileByID(TileMatrix *matrix, int id);
+/*Keresés a mátrixban azonosító szerint*/
+
+Item* GetItemByName(char *name, int n, Item *itemList);
+/*Tárgy megkeresése az inventoryban*/
 
 #endif

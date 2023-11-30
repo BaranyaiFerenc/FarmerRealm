@@ -45,9 +45,9 @@ void RenderShopPanel(SDL_Renderer* renderer, GUI_Panel *panel,ShopItem *items, i
         unsigned short int index = (i-5)/childcount;
         if(money >= items[index].price && level >= items[index].level)
         {
-            SDL_SetTextureColorMod(panel -> children[i+1].texture,100,255,100); //Ãr
+            SDL_SetTextureColorMod(panel -> children[i+1].texture,100,255,100); //Ár
             SDL_SetTextureColorMod(panel -> children[i+2].texture,255,255,255); //Szint
-            SDL_SetTextureColorMod(panel -> children[i-3].texture,255,255,255); //HÃ¡ttÃ©r
+            SDL_SetTextureColorMod(panel -> children[i-3].texture,255,255,255); //Háttér
 
             SDL_SetTextureAlphaMod(panel -> children[i-1].texture, 0);
         }
@@ -97,8 +97,11 @@ bool OverUI(Vector2 mousePos, SDL_Rect obj)
     return (mousePos.x > obj.x && mousePos.x < obj.x+obj.w) && (mousePos.y > obj.y && mousePos.y < obj.y+obj.h);
 }
 
-void CreateCraftPanel(SDL_Renderer* renderer,char *title, Vector2 windowSize, Recipe *recipes, int recipeCount, RecipeType type, Item *invetory, int inventoryCount, GUI_Panel *panel, int *recipeAmount)
+void CreateCraftPanel(SDL_Renderer* renderer,char *title, Vector2 windowSize, ArrayData *RecipesData, RecipeType type, Item *inventory, GUI_Panel *panel)
 {
+    int recipeCount = RecipesData->n;
+    Recipe *recipes = RecipesData->arr;
+
     TTF_Font *Font = TTF_OpenFont("system.fon", 30);
     Vector2 panelPosition = (Vector2){windowSize.x/2-200,windowSize.y/2-150};
     Vector2 panelSize = (Vector2){400,300};
@@ -117,15 +120,15 @@ void CreateCraftPanel(SDL_Renderer* renderer,char *title, Vector2 windowSize, Re
 
     CreateText("--Empty--", (Color){128,128,128}, 20, (Vector2){panelPosition.x+60,panelPosition.y+108}, renderer, Font, &panel -> children[panel -> childCount]);
     panel -> childCount++;
-    panel->children[panel->childCount].texture = NULL; //Majd ide fog betÃ¶ltÅ‘dni az ikon
+    panel->children[panel->childCount].texture = NULL; //Majd ide fog betöltõdni az ikon
     panel ->childCount++;
     CreateText("--Empty--", (Color){128,128,128}, 20, (Vector2){panelPosition.x+60,panelPosition.y+178}, renderer, Font, &panel -> children[panel -> childCount]);
     panel -> childCount++;
-    panel->children[panel->childCount].texture = NULL; //Majd ide fog betÃ¶ltÅ‘dni az ikon
+    panel->children[panel->childCount].texture = NULL; //Majd ide fog betöltõdni az ikon
     panel ->childCount++;
     CreateText("--Empty--", (Color){128,128,128}, 20, (Vector2){panelPosition.x+60,panelPosition.y+248}, renderer, Font, &panel -> children[panel -> childCount]);
     panel -> childCount++;
-    panel->children[panel->childCount].texture = NULL; //Majd ide fog betÃ¶ltÅ‘dni az ikon
+    panel->children[panel->childCount].texture = NULL; //Majd ide fog betöltõdni az ikon
     panel ->childCount++;
 
     int counter = 0;
@@ -142,7 +145,6 @@ void CreateCraftPanel(SDL_Renderer* renderer,char *title, Vector2 windowSize, Re
         }
     }
 
-    *recipeAmount = counter;
     counter = 0;
 
     for(int i = 0; i<recipeCount;i++)
@@ -155,7 +157,7 @@ void CreateCraftPanel(SDL_Renderer* renderer,char *title, Vector2 windowSize, Re
             position.x += 20;
             char iconPath[50];
 
-            Item *item = &invetory[recipes[i].itemIds[0]];
+            Item *item = &inventory[recipes[i].itemIds[0]];
 
             sprintf(iconPath,"Images/Icons/%s.png",item->Name);
             CreateImage(renderer, iconPath, position, (Vector2){35,35}, &panel -> children[panel -> childCount]);
@@ -182,7 +184,7 @@ void CreateCraftPanel(SDL_Renderer* renderer,char *title, Vector2 windowSize, Re
 
                 position.x += 25;
                 position.y -= 10;
-                item = &invetory[recipes[i].itemIds[1]];
+                item = &inventory[recipes[i].itemIds[1]];
 
                 sprintf(iconPath,"Images/Icons/%s.png",item->Name);
                 CreateImage(renderer, iconPath, position, (Vector2){35,35}, &panel -> children[panel -> childCount]);
@@ -209,7 +211,7 @@ void CreateCraftPanel(SDL_Renderer* renderer,char *title, Vector2 windowSize, Re
             position.x += 20;
             position.y -= 10;
 
-            item = &invetory[recipes[i].resultId];
+            item = &inventory[recipes[i].resultId];
 
             sprintf(iconPath,"Images/Icons/%s.png",item->Name);
             CreateImage(renderer, iconPath, position, (Vector2){35,35}, &panel -> children[panel -> childCount]);
@@ -232,7 +234,6 @@ void ShowAnimatedGUI(SDL_Renderer* renderer, GUI_Panel *panel, int windowSizeY, 
 {
     if(panel -> visible && panel -> panelImage.destination.y == windowSizeY-panel -> panelImage.destination.h)
     {
-        //RenderParent(renderer, *panel);
         RenderShopPanel(renderer,panel,items,childcount,money,level);
     }
     else if(!panel -> visible && panel -> panelImage.destination.y < windowSizeY)
@@ -262,10 +263,6 @@ void ShowAnimatedGUI(SDL_Renderer* renderer, GUI_Panel *panel, int windowSizeY, 
 
 }
 
-void CheckShopItems(GUI_Panel *parent, ShopItem *items, int childcount ,int money, int level)
-{
-}
-
 
 void FormatTime(int t, char *out)
 {
@@ -286,8 +283,10 @@ void RenderCanvas(Canvas *canvas, SDL_Renderer *renderer)
     SDL_RenderCopy(renderer, canvas->plantButton.texture, NULL, &canvas->plantButton.destination);
 }
 
-void OpenWarehouse(Canvas *canvas, SDL_Renderer *renderer, Item *inventory, int n, TTF_Font *font, int *ids)
+void OpenWarehouse(Canvas *canvas, SDL_Renderer *renderer, ArrayData *InvData, TTF_Font *font, int *ids)
 {
+    Item *inventory = InvData->arr;
+    int n = InvData->n;
     if(canvas->warehousePanel.visible)
     {
         canvas->warehousePanel.childCount = 2;

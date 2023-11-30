@@ -24,6 +24,7 @@ Tile* GetTileFromPosition(TileMatrix *matrix, Vector2 position)
             }
         }
     }
+    return NULL;
 }
 
 Tile* GetTileByID(TileMatrix *matrix, int id)
@@ -42,6 +43,18 @@ void FreeMatrix(TileMatrix *matrix)
     }
 
     free(matrix->matrix);
+}
+
+
+Item* GetItemByName(char *name, int n, Item *itemList)
+{
+    for(int i = 0; i<n;i++)
+    {
+        if(strcmp(name, itemList[i].Name) == 0)
+            return &itemList[i];
+    }
+
+    return NULL;
 }
 
 

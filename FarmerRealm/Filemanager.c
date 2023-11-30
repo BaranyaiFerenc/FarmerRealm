@@ -12,9 +12,14 @@ void WriteOutBin(unsigned long long int data)
     printf("%s\n", bit);
 }
 
-void GetSave(char path[], unsigned long long int *save)
+bool GetSave(char path[], unsigned long long int *save)
 {
     FILE* file = fopen(path,"rb");
+
+    if(file == NULL)
+    {
+        return false;
+    }
 
     unsigned long long int log;
     int index = 0;
@@ -26,6 +31,8 @@ void GetSave(char path[], unsigned long long int *save)
     }
 
     fclose(file);
+
+    return true;
 }
 
 unsigned long long int GetBinary(unsigned short int id, unsigned char type, unsigned long long misc)
@@ -38,6 +45,25 @@ unsigned long long int GetBinary(unsigned short int id, unsigned char type, unsi
     log +=misc;
 
     return log;
+}
+
+unsigned long long int GetLastTime()
+{
+    FILE *file;
+
+    unsigned long long int lastTime;
+
+    file = fopen("time.bin","rb");
+
+    if(file == NULL)
+    {
+        return 0;
+    }
+
+    fread(&lastTime,sizeof(lastTime), 1, file);
+
+    fclose(file);
+    return lastTime;
 }
 
 void SetSave(unsigned short int id, unsigned char type, unsigned long long misc)
@@ -104,18 +130,33 @@ void SaveInventory(Item *inventory, int n)
     FILE *file;
     file = fopen("inventory.bin","wb");
 
-    fwrite(&saveLogs,sizeof(saveLogs), 1, file);
+    fwrite(saveLogs,sizeof(saveLogs), 1, file);
 
     fclose(file);
 }
 
-void GetInventory(Item *inventory, int n)
+void SaveTime()
+{
+    FILE *file;
+
+    time_t seconds;
+    time(&seconds);
+    unsigned long long int actualTime = seconds;
+
+    file = fopen("time.bin","wb");
+
+    fwrite(&actualTime,sizeof(actualTime), 1, file);
+
+    fclose(file);
+}
+
+bool GetInventory(Item *inventory, int n)
 {
     FILE* file = fopen("inventory.bin","rb");
 
     if(file == NULL) {
       printf("No inventory save\n");
-      return;
+      return false;
     }
 
     int log;
@@ -134,4 +175,6 @@ void GetInventory(Item *inventory, int n)
     {
         inventory[i].Amount = inventoryLogs[i] << 16 >>16;
     }
+
+    return true;
 }

@@ -11,6 +11,8 @@
 #include <SDL_image.h>
 #include <math.h>
 
+#include "debugmalloc.h"
+
 typedef struct Vector2 //Kordináta struktúra
 {
     int x,y;
@@ -38,6 +40,7 @@ typedef enum ImageType {game, gui} ImageType;
 
 /*Forrásképek keresése*/
 SDL_Texture* GetSource(Source *sourceList, char *path, SDL_Renderer *renderer);
+
 /*Forrásképek betöltése*/
 void LoadSource(Source *sourceList, char *path, SDL_Renderer *renderer);
 

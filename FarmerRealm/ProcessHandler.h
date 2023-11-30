@@ -30,11 +30,15 @@ typedef struct ProcessList
 } ProcessList;
 
 Process* AddProcess(ProcessList *p_list, Process process);
+/*Folyamat hozzáadása dinamikus tömbhöz*/
 
 void RemoveProcess(ProcessList *p_list, int id);
+/*Folyamat eltávolítása*/
 
 Process* GetProcess(ProcessList *p_list, int id);
+/*Folyamat keresése azonosító alapján*/
 
 void ListProcesses(ProcessList *p_list);
+/*A dinamikus tömb kilistázása tesztelés végett*/
 
 #endif // PROCESSHANDLER

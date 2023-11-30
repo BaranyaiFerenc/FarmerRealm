@@ -34,6 +34,15 @@ typedef struct ShopItem
     unsigned char ID;
 } ShopItem;
 
+
+typedef struct ShopData
+{
+    int actualItem;
+    ShopItem Items[6];
+    unsigned short int ChildCount;
+    unsigned short int ItemCount;
+} ShopData;
+
 typedef struct Canvas
 {
     GUI_Panel buildPanel;
@@ -48,36 +57,37 @@ typedef struct Canvas
 } Canvas;
 
 void CreateText(char text[], Color color, int sizeOfText, Vector2 position, SDL_Renderer* renderer, TTF_Font *font, Image *img);
-/*SzÃ¶veg kirajzolÃ¡sa*/
+/*Szöveg kirajzolása*/
 
 void RenderParent(SDL_Renderer* renderer, GUI_Panel parent);
-/*Ã–sszegyÃ¼jti a gyermek objektumokat Ã©s megjelenÃ­ti Å‘ket*/
+/*Összegyüjti a gyermek objektumokat és megjeleníti õket*/
 
 void RenderShopPanel(SDL_Renderer* renderer, GUI_Panel *panel,ShopItem *items, int childcount ,int money, int level);
-/*MegjelenÃ­ti a vÃ¡sÃ¡rlÃ³ felÃ¼leteket Ã©s megvÃ¡ltoztatja a hozzÃ¡fÃ©rhetÃ©s szerint a szÃ­neket*/
+/*Megjeleníti a vásárló felületeket és megváltoztatja a hozzáférhetés szerint a színeket*/
 
 Vector2 GetUpRightCornerPosition(Vector2 parentPos, Vector2 parentSize, Vector2 objSize);
 Vector2 GetUpLeftCornerPosition(Vector2 parentPos, Vector2 parentSize, Vector2 objSize);
 
 bool OverUI(Vector2 mousePos, SDL_Rect obj);
-/*EllenÅ‘rzi hogy a megadott koordinÃ¡ta a megadott interfÃ©sz elem felett van-e*/
+/*Ellenõrzi hogy a megadott koordináta a megadott interfész elem felett van-e*/
 
-void CreateCraftPanel(SDL_Renderer* renderer,char *title, Vector2 windowSize, Recipe *recipes, int recipeCount, RecipeType type, Item *invetory, int inventoryCount, GUI_Panel *panel, int *recipeAmount);
-/*LÃ©trehozza a "barkÃ¡csolÃ¡s" menÃ¼ elemeket*/
+void CreateCraftPanel(SDL_Renderer* renderer,char *title, Vector2 windowSize, ArrayData *RecipesData, RecipeType type, Item *inventory, GUI_Panel *panel);
+/*Létrehozza a "barkácsolás" menü elemeket*/
 
 int GetTextLength(char *text);
-/*VisszatÃ©r a char[] paramÃ©ter hosszÃ¡val (szÃ¼ksÃ©ges a szÃ¶veg mÃ©retÃ©nek meghatÃ¡rozÃ¡sÃ¡hoz)*/
+/*Visszatér a char[] paraméter hosszával (szükséges a szöveg méretének meghatározásához)*/
 
 void ShowAnimatedGUI(SDL_Renderer* renderer, GUI_Panel *panel, int windowSizeY, ShopItem *items, int childcount ,int money, int level);
-/*KiszÃ¡molja Ã©s legenerÃ¡lja az eltÅ±nÃ©s/elÅ‘jÃ¶vetel animÃ¡ciÃ³t*/
-
-void CheckShopItems(GUI_Panel *parent, ShopItem *items, int childcount ,int money, int level);
+/*Kiszámolja és legenerálja az eltûnés/elõjövetel animációt*/
 
 void FormatTime(int t, char *out);
 
 void RenderCanvas(Canvas *canvas, SDL_Renderer *renderer);
+/*Az alap GUI megjelenítése*/
 
-void OpenWarehouse(Canvas *canvas, SDL_Renderer *renderer, Item *inventory, int n,TTF_Font *font,int *ids);
+void OpenWarehouse(Canvas *canvas, SDL_Renderer *renderer, ArrayData *InvData,TTF_Font *font,int *ids);
+/*A raktár listájának létrehozása*/
 
 void SetParentAlpha(GUI_Panel *parent, int a);
+
 #endif // GUI_H

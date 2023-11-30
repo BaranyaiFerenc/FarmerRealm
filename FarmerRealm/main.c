@@ -1,4 +1,4 @@
-Ôªø#include <SDL.h>
+#include <SDL.h>
 #include <SDL2_gfxPrimitives.h>
 #include <SDL_ttf.h>
 #include <SDL_image.h>
@@ -28,43 +28,24 @@ typedef struct Crafter
     bool opened;
     GUI_Panel menu;
     int ProcessIds[3];
-    int RecipeAmount;
     RecipeType type;
 } Crafter;
 
-typedef struct ShopData
-{
-    int actualItem;
-    ShopItem Items[6];
-    unsigned short int ChildCount;
-    unsigned short int ItemCount;
-} ShopData;
-
-
-
-//Ir√°ny√≠t√°s
+//Ir·nyÌt·s
 void OnLeftMouseDown(SDL_Event e);
-void OnLeftMouseUp(SDL_Event e,Canvas *canvas, Item *AllItem, int ItemCount, int* SelectedTileId, int* SelectInfoAlpha,int *ids);
-void OnMouseMove(SDL_Event e,Item *AllItem, int ItemCount);
+void OnLeftMouseUp(SDL_Event e,Canvas *canvas, Item *AllItem, int ItemCount,int* ids, ShopData* plantData, ShopData* buildData, Crafter *crafters, bool *BuildMode, bool *PlantMode, ArrayData *recipeData, ArrayData *invData);
+void OnMouseMove(SDL_Event e,Item *AllItem, int ItemCount, Crafter *crafters, bool LeftMouseDown);
 
-//Sz√≠nek be√°ll√≠t√°sa
-void ClearColors();
-void SetBuildColors();
-void SetPlantColors();
-
-//Panelek bez√°r√°sa
-void CloseBuildPanel();
-void ClosePlantPanel();
-
+//Inventory kezelı f¸ggvÈnyek
 ShopItem* GetShopItemById(int id, int n, ShopItem *itemList);
 int GetPlantImageId(ShopItem *plant, unsigned long long int TimeWhenDone);
 Item* GetItemByName(char *name, int n, Item *itemList);
 
-
-void AddXP(int amount, Image *levelText);
+//PÈnz Ès szint kezelÈse
+void AddXP(int amount, Image *levelText, Image *levelProg);
 void AddMoney(int amount, Image *moneyText);
 
-//Ablak √©s a renderer
+//Ablak Ès a renderer
 SDL_Window *window;
 SDL_Renderer *renderer;
 
@@ -72,47 +53,17 @@ SDL_Renderer *renderer;
 int money = 200;
 int level = 1;
 int xp = 0;
-int nextLimit;
-int remainXP;
 unsigned timer;
 
-Crafter crafters[3];
-
-bool BuildMode = false;
-int actualBuildItem = 0;
-ShopItem Buildings[5];
-unsigned short int BuildChildCount = 6;
-unsigned short int BuildItemCount = 3;
-
-ShopData BuildingData;
-ShopData PlantingData;
-
-char *Undestroyables[7] = {"Windmill","Bakery","Brewery","Shop","Warehouse","Ground",""};
-
-bool PlantMode = false;
-int actualPlantItem = 0;
-ShopItem Plants[6];
-unsigned short int PlantChildCount = 6;
-unsigned short int PlantItemCount = 6;
-
 Tile *LastTile;
-Vector2 lastMousePos;
-
 ProcessList plist = {NULL,0};
-
-Vector2 origin = {-300,1800};
-Vector2 moneyPos;
 
 TTF_Font *font;
 TileMatrix matrix;
 
-Recipe Recipes[20];
-int RecipeCount = 20;
-
-int beehiveTime = 600;
-
-void Init_Map(Vector2 origin)
+void Init_Map(ShopData *plantData, ShopData *buildData, Crafter *crafters)
 {
+    Vector2 origin = {-300,1800};
     FILE *file;
     xp = 0;
     file = fopen("save.bin", "r");
@@ -123,7 +74,7 @@ void Init_Map(Vector2 origin)
 
     matrix.matrix = CreateMatrix(rowSize,rowSize);
 
-    //√âp√ºletek
+    //…p¸letek
     Vector2 millPosition ={21,19};
     Vector2 bakeryPosition ={18,21};
     Vector2 breweryPosition ={18,19};
@@ -137,6 +88,18 @@ void Init_Map(Vector2 origin)
         xp = (saves[0] >> 48);
         timer = ((saves[0] << 32 >> 32)*1000);
         money = (saves[0] << 16 >> 48);
+
+        time_t aTime;
+        time(&aTime);
+        unsigned long long int actualTime = aTime;
+        unsigned long long int lastTime = GetLastTime();
+
+        if(actualTime > lastTime && lastTime != 0)
+        {
+            int since = (actualTime-lastTime);
+            timer += since*1000;
+            printf("Since last time: %d sec\n",since);
+        }
 
         printf("Save found\n");
         printf("\to Last time: %u sec\n",timer/1000);
@@ -274,7 +237,7 @@ void Init_Map(Vector2 origin)
                             Process p = {index,Plant,index,timeToDone,plantType};
                             matrix.matrix[x][y].process = AddProcess(&plist, p);
 
-                            ShopItem *plant = GetShopItemById(plantType, PlantItemCount, Plants);
+                            ShopItem *plant = GetShopItemById(plantType, plantData->ItemCount, plantData->Items);
                             char pathToPlant[200];
                             sprintf(pathToPlant, "Images/Plants/%s/%s4.png",plant->name,plant->name);
                             CreateImage(renderer, pathToPlant,delta,(Vector2){d_baseSize,d_baseSize}, &matrix.matrix[x][y].additionalImage);
@@ -295,7 +258,7 @@ void Init_Map(Vector2 origin)
                         }
                         else
                         {
-                            timeToDone = timer/1000+beehiveTime;
+                            timeToDone = timer/1000+600;
                             printf("Beehive looped production started (%d)\n",timeToDone);
                             Process p = {index,Loop,index,timeToDone,6};
                             matrix.matrix[x][y].process = AddProcess(&plist, p);
@@ -325,22 +288,22 @@ void Init_Map(Vector2 origin)
                     {
                         bool placed = false;
 
-                        for(int i = 0; i<BuildItemCount && !placed;i++)
+                        for(int i = 0; i<buildData->ItemCount && !placed;i++)
                         {
-                            if(Buildings[i].ID == type)
+                            if(buildData->Items[i].ID == type)
                             {
                                 char path[100];
-                                sprintf(path,"Images/%s.png",Buildings[i].name);
+                                sprintf(path,"Images/%s.png",buildData->Items[i].name);
                                 CreateImage(renderer,path,delta,(Vector2){d_baseSize,d_baseSize}, &matrix.matrix[x][y].img);
-                                strcpy(matrix.matrix[x][y].name,Buildings[i].name);
+                                strcpy(matrix.matrix[x][y].name,buildData->Items[i].name);
                                 placed = true;
                             }
                         }
 
                         if(!placed)
                         {
-                            CreateImage(renderer,"Images/Error.png",delta,(Vector2){d_baseSize,d_baseSize}, &matrix.matrix[x][y].img);
-                            strcpy(matrix.matrix[x][y].name,"Error");
+                            CreateImage(renderer,"Images/Ground.png",delta,(Vector2){d_baseSize,d_baseSize}, &matrix.matrix[x][y].img);
+                            strcpy(matrix.matrix[x][y].name,"Ground");
                             printf("Error while loading tile(%d:%d) with type: %d\n",x,y,type);
                             placed = true;
                         }
@@ -355,7 +318,6 @@ void Init_Map(Vector2 origin)
         }
 
         fclose(file);
-        //printf("Matrix created with %dx%d size\n",matrix.column_size,matrix.row_size);
         return;
     }
 
@@ -446,7 +408,7 @@ void Init_Map(Vector2 origin)
     fclose(file);
 }
 
-void Init_GUI(Canvas* canvas)
+void Init_GUI(Canvas* canvas, ShopData *plantData, ShopData *buildData)
 {
     Color textColor = (Color){80,52,30};
     canvas->buildPanel.childCount = 0;
@@ -462,7 +424,7 @@ void Init_GUI(Canvas* canvas)
     CreateImage(renderer,"Images/GUI/BuildButton.png",(Vector2){d_windowSizeX-100, d_windowSizeY-100},(Vector2){100,100}, &canvas->buildButton);
     CreateImage(renderer,"Images/GUI/PlantButton.png",(Vector2){d_windowSizeX-210, d_windowSizeY-100},(Vector2){100,100}, &canvas->plantButton);
 
-    //√âp√≠t≈ë men√º l√©trehoz√°sa
+    //…pÌtı men¸ lÈtrehoz·sa
     CreateImage(renderer,"Images/GUI/WidePanel.png",(Vector2){0, d_windowSizeY-220},(Vector2){d_windowSizeX,220}, &canvas->buildPanel.panelImage);
     CreateImage(renderer,"Images/GUI/Exit.png",(Vector2){d_windowSizeX-60, d_windowSizeY-220},(Vector2){50,50}, &canvas->buildPanel.children[canvas->buildPanel.childCount]);
 
@@ -471,25 +433,25 @@ void Init_GUI(Canvas* canvas)
     canvas->buildPanel.childCount++;
 
 
-    for(int i = 0; i<BuildItemCount; i++)
+    for(int i = 0; i<buildData->ItemCount; i++)
     {
         CreateImage(renderer,"Images/GUI/Item.png",(Vector2){20+i*160, d_windowSizeY-200},(Vector2){150,180}, &canvas->buildPanel.children[canvas->buildPanel.childCount]);
         canvas->buildPanel.childCount++;
         char path[20];
-        sprintf(&path,"Images/%s.png",Buildings[i].name);
+        sprintf(&path,"Images/%s.png",buildData->Items[i].name);
 
         CreateImage(renderer,path ,(Vector2){35+i*160, d_windowSizeY-220},(Vector2){120,120},&canvas->buildPanel.children[canvas->buildPanel.childCount]);
         canvas->buildPanel.childCount++;
         CreateImage(renderer,"Images/GUI/Lock.png" ,(Vector2){40+i*160, d_windowSizeY-200},(Vector2){110,110},&canvas->buildPanel.children[canvas->buildPanel.childCount]);
         canvas->buildPanel.childCount++;
 
-        CreateText(Buildings[i].name,textColor,20,(Vector2){50+i*160,d_windowSizeY-100},renderer,font, &canvas->buildPanel.children[canvas->buildPanel.childCount]);
+        CreateText(buildData->Items[i].name,textColor,20,(Vector2){50+i*160,d_windowSizeY-100},renderer,font, &canvas->buildPanel.children[canvas->buildPanel.childCount]);
         canvas->buildPanel.childCount++;
         char additionalText[10];
-        sprintf(&additionalText,"$%d",Buildings[i].price);
+        sprintf(&additionalText,"$%d",buildData->Items[i].price);
         CreateText(additionalText,textColor,20,(Vector2){50+i*160,d_windowSizeY-60},renderer,font, &canvas->buildPanel.children[canvas->buildPanel.childCount]);
         canvas->buildPanel.childCount++;
-        sprintf(&additionalText,"Level %d",Buildings[i].level);
+        sprintf(&additionalText,"Level %d",buildData->Items[i].level);
         CreateText(additionalText,textColor,20,(Vector2){65+i*160,d_windowSizeY-80},renderer,font, &canvas->buildPanel.children[canvas->buildPanel.childCount]);
         canvas->buildPanel.childCount++;
 
@@ -498,31 +460,31 @@ void Init_GUI(Canvas* canvas)
     CreateImage(renderer,"Images/GUI/Bulldozer.png",(Vector2){d_windowSizeX-230, d_windowSizeY-200},(Vector2){150,180}, &canvas->buildPanel.children[canvas->buildPanel.childCount]);
     canvas->buildPanel.childCount++;
 
-    //√últet≈ë men√º l√©trehoz√°sa
+    //‹ltetı men¸ lÈtrehoz·sa
     CreateImage(renderer,"Images/GUI/WidePanel.png",(Vector2){0, d_windowSizeY-220},(Vector2){d_windowSizeX,220}, &canvas->plantPanel.panelImage);
     CreateImage(renderer,"Images/GUI/Exit.png",(Vector2){d_windowSizeX-60, d_windowSizeY-220},(Vector2){50,50}, &canvas->plantPanel.children[canvas->plantPanel.childCount]);
     canvas->plantPanel.childCount++;
     CreateText("Plant",textColor,50,(Vector2){20,d_windowSizeY-270},renderer,font, &canvas->plantPanel.children[canvas->plantPanel.childCount]);
     canvas->plantPanel.childCount++;
 
-    for(int i = 0; i<PlantItemCount; i++)
+    for(int i = 0; i<plantData->ItemCount; i++)
     {
         CreateImage(renderer,"Images/GUI/Item.png",(Vector2){20+i*160, d_windowSizeY-200},(Vector2){150,180}, &canvas->plantPanel.children[canvas->plantPanel.childCount]);
         canvas->plantPanel.childCount++;
         char path[20];
-        sprintf(&path,"Images/Icons/%sseed.png",Plants[i].name,"seed");
+        sprintf(&path,"Images/Icons/%sseed.png",plantData->Items[i].name,"seed");
 
         CreateImage(renderer,path ,(Vector2){45+i*160, d_windowSizeY-190},(Vector2){100,100},&canvas->plantPanel.children[canvas->plantPanel.childCount]);
         canvas->plantPanel.childCount++;
         CreateImage(renderer,"Images/GUI/Lock.png" ,(Vector2){40+i*160, d_windowSizeY-200},(Vector2){110,110},&canvas->plantPanel.children[canvas->plantPanel.childCount]);
         canvas->plantPanel.childCount++;
-        CreateText(Plants[i].name,textColor,20,(Vector2){50+i*160,d_windowSizeY-100},renderer,font, &canvas->plantPanel.children[canvas->plantPanel.childCount]);
+        CreateText(plantData->Items[i].name,textColor,20,(Vector2){50+i*160,d_windowSizeY-100},renderer,font, &canvas->plantPanel.children[canvas->plantPanel.childCount]);
         canvas->plantPanel.childCount++;
         char additionalText[60];
-        sprintf(&additionalText,"$%d",Plants[i].price);
+        sprintf(&additionalText,"$%d",plantData->Items[i].price);
         CreateText(additionalText,textColor,20,(Vector2){70+i*160,d_windowSizeY-60},renderer,font, &canvas->plantPanel.children[canvas->plantPanel.childCount]);
         canvas->plantPanel.childCount++;
-        sprintf(&additionalText,"Level %d",Plants[i].level);
+        sprintf(&additionalText,"Level %d",plantData->Items[i].level);
         CreateText(additionalText,textColor,20,(Vector2){65+i*160,d_windowSizeY-80},renderer,font, &canvas->plantPanel.children[canvas->plantPanel.childCount]);
         canvas->plantPanel.childCount++;
 
@@ -537,19 +499,25 @@ void Init_GUI(Canvas* canvas)
     CreateImage(renderer, "Images/GUI/Progression.png",(Vector2){844,85},(Vector2){215,29}, &canvas->levelProgression);
     SDL_SetTextureAlphaMod(canvas->levelProgression.texture, 100);
 
-    //P√©nz √©s szint sz√∂veg friss√≠t√©se
-    AddMoney(0, &canvas->moneyText);
-    AddXP(0, &canvas->levelText);
-}
+    canvas->moneyText.texture = NULL;
+    canvas->levelText.texture = NULL;
 
+
+    //PÈnz Ès szint szˆveg frissÌtÈse
+    AddMoney(0, &canvas->moneyText);
+    AddXP(0, &canvas->levelText, &canvas->levelProgression);
+}
 
 int main(int argc, char *argv[])
 {
-    //Font k√©szlet bet√∂lt√©se
-    //A bet≈±k√©szlet Microsoft Corporation √°ltal 8514syse.fon Windows 10-ben megtal√°lhat√≥ el≈ëre telep√≠tett
+    //Font kÈszlet betˆltÈse
+    //A bet˚kÈszlet Microsoft Corporation ·ltal 8514syse.fon Windows 10-ben megtal·lhatÛ elıre telepÌtett
     TTF_Init();
     font = TTF_OpenFont("System.fon", 20);
 
+
+    ArrayData RecipesData;
+    ArrayData InventoryData;
 
     int ItemCount = 13;
     Item AllItem[ItemCount];
@@ -557,10 +525,10 @@ int main(int argc, char *argv[])
     //Inventory
     AllItem[0] = (Item){.Name = "Wheat", .Price = 3, .Amount = 0, .id = 0};
     AllItem[1] = (Item){.Name = "Potato", .Price = 5, .Amount = 0, .id = 1};
-    AllItem[2] = (Item){.Name = "Corn", .Price = 8, .Amount = 0, .id = 2};
-    AllItem[3] = (Item){.Name = "Tomato", .Price = 8, .Amount = 0, .id = 3};
+    AllItem[2] = (Item){.Name = "Corn", .Price = 6, .Amount = 0, .id = 2};
+    AllItem[3] = (Item){.Name = "Tomato", .Price = 6, .Amount = 0, .id = 3};
     AllItem[4] = (Item){.Name = "Lettuce", .Price = 9, .Amount = 0, .id = 4};
-    AllItem[5] = (Item){.Name = "Pumpkin", .Price = 20, .Amount = 0, .id = 5};
+    AllItem[5] = (Item){.Name = "Pumpkin", .Price = 30, .Amount = 0, .id = 5};
     AllItem[6] = (Item){.Name = "Honey", .Price = 15, .Amount = 0, .id = 6};
     AllItem[7] = (Item){.Name = "Flour", .Price = 10, .Amount = 0, .id = 7};
     AllItem[8] = (Item){.Name = "Bread", .Price = 30, .Amount = 0, .id = 8};
@@ -571,65 +539,79 @@ int main(int argc, char *argv[])
 
     GetInventory(AllItem, ItemCount);
 
-    //Az √©p√≠thet≈ë √©p√ºletek deklar√°l√°sa (n√©v, √°r, szint, id≈ë, azonos√≠t√≥)
-    Buildings[0] = (ShopItem){"Field",30,1,10,21};
-    Buildings[1] = (ShopItem){"Beehive",500,5,60,22};
-    Buildings[2] = (ShopItem){"Greenhouse",2000,10,300,23};
-    Buildings[3] = (ShopItem){"Ground",10,1,60,10}; //Megsemmis√≠t√©s gombhoz
-    Buildings[4] = (ShopItem){"ConstructionSite",0,1,60,1}; //√âp√≠t√©s alatt √°ll√≥ √©p√ºletek
+    InventoryData = (ArrayData){AllItem, ItemCount};
 
-    //Az √©p√≠thet≈ë √©p√ºletek deklar√°l√°sa (n√©v, √°r, szint, id≈ë, azonos√≠t√≥)
-    /*
+    ShopData BuildingData;
+    ShopData PlantingData;
+
+    //Az ÈpÌthetı Èp¸letek deklar·l·sa (nÈv, ·r, szint, idı, azonosÌtÛ)
+
     BuildingData.Items[0] = (ShopItem){"Field",30,1,10,21};
     BuildingData.Items[1] = (ShopItem){"Beehive",500,5,60,22};
     BuildingData.Items[2] = (ShopItem){"Greenhouse",2000,10,300,23};
-    BuildingData.Items[3] = (ShopItem){"Ground",10,1,60,10}; //Megsemmis√≠t√©s gombhoz
-    BuildingData.Items[4] = (ShopItem){"ConstructionSite",0,1,60,1}; //√âp√≠t√©s alatt √°ll√≥ √©p√ºletek
+    BuildingData.Items[3] = (ShopItem){"Ground",10,1,60,10}; //MegsemmisÌtÈs gombhoz
+    BuildingData.Items[4] = (ShopItem){"ConstructionSite",0,1,60,1}; //…pÌtÈs alatt ·llÛ Èp¸letek
 
-    BuildingData.ItemCount = 5;*/
+    BuildingData.ItemCount = 3;
+    BuildingData.ChildCount = 6;
+    BuildingData.actualItem = 0;
 
-    //√últethet≈ë n√∂v√©nyek deklar√°l√°sa (n√©v, √°r, szint, id≈ë, azonos√≠t√≥)
-    Plants[0] = (ShopItem){"Wheat",1,1,30,101};
-    Plants[1] = (ShopItem){"Potato",2,2,60,102};
-    Plants[2] = (ShopItem){"Corn",4,3,120,103};
-    Plants[3] = (ShopItem){"Tomato",4,5,240,104};
-    Plants[4] = (ShopItem){"Lettuce",4,6,60,105};
-    Plants[5] = (ShopItem){"Pumpkin",20,8,300,106};
+    //‹ltethetı nˆvÈnyek deklar·l·sa (nÈv, ·r, szint, idı, azonosÌtÛ)
+    PlantingData.Items[0] = (ShopItem){"Wheat",1,1,30,101};
+    PlantingData.Items[1] = (ShopItem){"Potato",2,2,60,102};
+    PlantingData.Items[2] = (ShopItem){"Corn",4,3,120,103};
+    PlantingData.Items[3] = (ShopItem){"Tomato",4,5,240,104};
+    PlantingData.Items[4] = (ShopItem){"Lettuce",4,6,60,105};
+    PlantingData.Items[5] = (ShopItem){"Pumpkin",20,8,300,106};
 
-    //A "bark√°cs" √©p√ºletek deklar√°l√°sa
+    PlantingData.ItemCount = 6;
+    PlantingData.ChildCount = 6;
+    PlantingData.actualItem = 0;
+
+    //A "bark·cs" Èp¸letek deklar·l·sa
+    Crafter crafters[3];
+
     crafters[0] = (Crafter){"Windmill"};
     crafters[1] = (Crafter){"Brewery"};
     crafters[2] = (Crafter){"Bakery"};
 
-    //Receptek deklar√°l√°sa
+
+
+    //Receptek deklar·l·sa
+    Recipe Recipes[20];
+
     Recipes[0] = (Recipe){.itemIds = {0, NULL}, .itemAmounts = {2,NULL}, .resultId = 7, .resultAmount = 1, .type = Windmill, .t = 30, .id = 0}; //Liszt
     Recipes[1] = (Recipe){.itemIds = {2, NULL}, .itemAmounts = {6,NULL}, .resultId = 7, .resultAmount = 4, .type = Windmill, .t = 90, .id = 1}; //Liszt
     Recipes[2] = (Recipe){.itemIds = {3, NULL}, .itemAmounts = {2,NULL}, .resultId = 9, .resultAmount = 1, .type = Windmill, .t = 60, .id = 2}; //Ketchup
 
-    Recipes[3] = (Recipe){.itemIds = {7, NULL}, .itemAmounts = {2,NULL}, .resultId = 8, .resultAmount = 1, .type = Bakery, .t = 60, .id = 3}; //Keny√©r
-    Recipes[4] = (Recipe){.itemIds = {7, 5}, .itemAmounts = {2,1}, .resultId = 10, .resultAmount = 1, .type = Bakery, .t = 120, .id = 4}; //Pumpkinpie
+    Recipes[3] = (Recipe){.itemIds = {7, NULL}, .itemAmounts = {2,NULL}, .resultId = 8, .resultAmount = 1, .type = Bakery, .t = 60, .id = 3}; //KenyÈr
+    Recipes[4] = (Recipe){.itemIds = {7, NULL}, .itemAmounts = {10,NULL}, .resultId = 8, .resultAmount = 6, .type = Bakery, .t = 300, .id = 4}; //KenyÈr
+    Recipes[5] = (Recipe){.itemIds = {7, 5}, .itemAmounts = {2,1}, .resultId = 10, .resultAmount = 1, .type = Bakery, .t = 120, .id = 5}; //Pumpkinpie
 
-    Recipes[5] = (Recipe){.itemIds = {1, NULL}, .itemAmounts = {6,NULL}, .resultId = 11, .resultAmount = 1, .type = Brewery, .t = 240, .id = 5}; //Vodka
-    Recipes[6] = (Recipe){.itemIds = {0, 1}, .itemAmounts = {6,5}, .resultId = 12, .resultAmount = 1, .type = Brewery, .t = 300, .id = 6}; //Whiskey
+    Recipes[6] = (Recipe){.itemIds = {1, NULL}, .itemAmounts = {6,NULL}, .resultId = 11, .resultAmount = 1, .type = Brewery, .t = 240, .id = 6}; //Vodka
+    Recipes[7] = (Recipe){.itemIds = {0, 1}, .itemAmounts = {6,5}, .resultId = 12, .resultAmount = 1, .type = Brewery, .t = 300, .id = 7}; //Whiskey
+    Recipes[8] = (Recipe){.itemIds = {2, 1}, .itemAmounts = {10,3}, .resultId = 12, .resultAmount = 2, .type = Brewery, .t = 420, .id = 8}; //Whiskey
 
-    RecipeCount = 7;
+    int RecipeCount = 9;
 
-    //Ablak l√©terhoz√°sa
+    RecipesData = (ArrayData){Recipes, RecipeCount};
+
+    //Ablak lÈterhoz·sa
     CreateWindow("FarmerRealm", d_windowSizeX, d_windowSizeY, &window, &renderer);
 
 
-    Init_Map(origin);
+    Init_Map(&PlantingData, &BuildingData, crafters);
 
     LastTile = &matrix.matrix[0][0];
 
     Canvas canvas;
-    Init_GUI(&canvas);
+    Init_GUI(&canvas, &PlantingData, &BuildingData);
 
 
-    //A "bark√°cs" √©p√ºletekhez tartoz√≥ men√º l√©trehoz√°sa
-    CreateCraftPanel(renderer,"Windmill", (Vector2){d_windowSizeX,d_windowSizeY},Recipes, RecipeCount,Windmill,AllItem,ItemCount, &crafters[0].menu, &crafters[0].RecipeAmount);
-    CreateCraftPanel(renderer,"Brewery", (Vector2){d_windowSizeX,d_windowSizeY},Recipes, RecipeCount,Brewery,AllItem,ItemCount, &crafters[1].menu, &crafters[1].RecipeAmount);
-    CreateCraftPanel(renderer,"Bakery", (Vector2){d_windowSizeX,d_windowSizeY},Recipes, RecipeCount,Bakery,AllItem,ItemCount, &crafters[2].menu, &crafters[2].RecipeAmount);
+    //A "bark·cs" Èp¸letekhez tartozÛ men¸ lÈtrehoz·sa
+    CreateCraftPanel(renderer,"Windmill", (Vector2){d_windowSizeX,d_windowSizeY},&RecipesData,Windmill,AllItem, &crafters[0].menu);
+    CreateCraftPanel(renderer,"Brewery", (Vector2){d_windowSizeX,d_windowSizeY},&RecipesData,Brewery,AllItem, &crafters[1].menu);
+    CreateCraftPanel(renderer,"Bakery", (Vector2){d_windowSizeX,d_windowSizeY},&RecipesData,Bakery,AllItem, &crafters[2].menu);
 
     crafters[0].type = Windmill;
     crafters[1].type = Brewery;
@@ -638,10 +620,10 @@ int main(int argc, char *argv[])
     printf("GUI loaded...\n");
     printf("Canvas exist %d\n",canvas.plantPanel.childCount);
 
-    //Ha m√°r van elmentett id≈ë akkor ez hozz√°adja a mostanihoz
+    //Ha m·r van elmentett idı akkor ez hozz·adja a mostanihoz
     unsigned plussTime = timer;
 
-    //H√°tt√©rsz√≠n be√°ll√≠t√°sa
+    //H·ttÈrszÌn be·llÌt·sa
     SDL_SetRenderDrawColor(renderer, 3, 190, 252, 255);
 
     SDL_Event event;
@@ -653,36 +635,62 @@ int main(int argc, char *argv[])
     int SelectedTileId = 0;
     int SelectInfoAlpha= 0;
 
+    bool LeftMouseDown;
+
     int warehouseIDs[ItemCount];
+
+    int sinceLastSave = 0;
+
+    bool BuildMode = false;
+    bool PlantMode = false;
+
+
+    Vector2 lastMousePos;
+
 
     Image modeSign;
     GUI_Panel selectInfo;
     CreateImage(renderer,"Images/GUI/InfoButton.png", (Vector2){0,0},(Vector2){300,90},&selectInfo.panelImage);
 
-    //F≈ë ciklus
+    //Fı ciklus
     while (event.type != SDL_QUIT)
     {
-        //Inputok kezel√©se
+        //Inputok kezelÈse
         while (SDL_PollEvent(&event))
         {
             switch(event.type)
-                {
+            {
                 case SDL_MOUSEBUTTONDOWN:
                     if(event.button.button == 1)
+                    {
+                        LeftMouseDown = true;
+                        lastMousePos = (Vector2){event.motion.x,event.motion.y};
                         OnLeftMouseDown(event);
+                    }
                     break;
                 case SDL_MOUSEBUTTONUP:
                     if(event.button.button == 1)
-                        OnLeftMouseUp(event, &canvas, AllItem, ItemCount,&SelectedTileId,&SelectInfoAlpha, warehouseIDs);
+                    {
+                        LeftMouseDown = false;
+                        //Kisz·mÌtjuk az egÈrrel megtett ˙t hossz·t, hogy meg·llapÌtsuk, hogy click volt-e vagy vonszol·s
+                        if(sqrt(pow(lastMousePos.x-event.motion.x,2)+pow(lastMousePos.y-event.motion.y,2)) < 10)
+                            OnLeftMouseUp(event, &canvas, AllItem, ItemCount,warehouseIDs,&PlantingData, &BuildingData, crafters, &BuildMode, &PlantMode, &RecipesData, &InventoryData);
+
+                        if(LastTile != NULL)
+                        {
+                            SelectedTileId = LastTile ->id;
+                            SelectInfoAlpha = 255;
+                        }
+                    }
                     break;
                 case SDL_MOUSEMOTION:
-                    OnMouseMove(event, AllItem, ItemCount);
+                    OnMouseMove(event, AllItem, ItemCount, crafters, LeftMouseDown);
                     break;
                 case SDL_KEYDOWN:
                     if(event.key.keysym.sym == SDLK_UP)
-                        AddXP(level, &canvas.levelText);
+                        AddXP(level, &canvas.levelText,&canvas.levelProgression);
                     if(event.key.keysym.sym == SDLK_DOWN && level > 1)
-                        AddXP(-level, &canvas.levelText);
+                        AddXP(-level, &canvas.levelText,&canvas.levelProgression);
                     if(event.key.keysym.sym == SDLK_RIGHT)
                         AddMoney(1000, &canvas.moneyText);
                     if(event.key.keysym.sym == SDLK_LEFT && money > 1000)
@@ -701,7 +709,7 @@ int main(int argc, char *argv[])
             }
         }
 
-        //Id≈ë kezel√©se
+        //Idı kezelÈse
         unsigned now;
         unsigned delta_time;
 
@@ -710,142 +718,155 @@ int main(int argc, char *argv[])
         timer += delta_time;
 
 
-        //Biztons√°gi ment√©s percenk√©nt
-        if(timer/1000 % 60)
+        //Biztons·gi mentÈs 10 m·sodpercenkÈnt
+        if(sinceLastSave >= 10000)
         {
             SaveStats(xp, money, ((int)timer/1000));
             SaveInventory(AllItem, ItemCount);
+            SaveTime();
+            printf("Quick save....\n");
+            sinceLastSave=0;
+        }
+        else
+        {
+            sinceLastSave+=delta_time;
         }
 
-        //Fut√≥ folyamatok ellen≈ërz√©se
+        //FutÛ folyamatok ellenırzÈse
 
         for(int i = 0; i<plist.n;i++)
         {
-            bool done = false;
             Tile *actual = GetTileByID(&matrix, plist.l[i].TileID);
-            if(!done && plist.l[i].type == Plant && plist.l[i].t >= timer/1000 && !plist.l[i].done && strcmp(actual->name, "Greenhouse") != 0)
+
+            if(timer/1000 < plist.l[i].t && plist.l[i].type == Plant && !plist.l[i].done && strcmp(actual->name, "Greenhouse") != 0)
             {
                 Process *p = &plist.l[i];
                 char pathToPlant[200];
-                ShopItem *plant = GetShopItemById(p->misc,PlantItemCount,Plants);
+                ShopItem *plant = GetShopItemById(p->misc,PlantingData.ItemCount,PlantingData.Items);
                 int ImageIndex = GetPlantImageId(plant,p->t);
                 sprintf(pathToPlant,"Images/Plants/%s/%s%d.png",plant->name,plant->name,ImageIndex+1);
 
                 Vector2 pos = {actual->img.destination.x,actual->img.destination.y};
                 CreateImage(renderer, pathToPlant,pos,(Vector2){d_baseSize,d_baseSize}, &actual->additionalImage);
             }
-
-            if(!done && plist.l[i].type == Plant && plist.l[i].t <= timer/1000 && !plist.l[i].done)
+            else if(timer/1000 >= plist.l[i].t && !plist.l[i].done)
             {
-                plist.l[i].done = true;
-                printf("End production...\n");
-
-                ShopItem *shopItem = GetShopItemById(plist.l[i].misc, PlantItemCount, Plants);
-
-                Item *product = GetItemByName(shopItem->name, ItemCount,AllItem);
-
-                char path[100];
-                sprintf(path,"Images/Icons/%s.png",product->Name);
-
-                CreateImage(renderer,path, (Vector2){100,100}, (Vector2){50,50}, &actual->icon);
-
-                printf("Production on %s(%d:%d):%s ended\n",actual->name,actual->coordinates.x,actual->coordinates.y,shopItem->name);
-                done = true;
-            }
-
-            if(!done && plist.l[i].type == Loop && plist.l[i].t <= now/1000 && !plist.l[i].done)
-            {
-                plist.l[i].done = true;
-                printf("Ended loop production...\n");
-
-                Item *product = &AllItem[plist.l[i].misc];
-
-                char path[100];
-                sprintf(path,"Images/Icons/%s.png",product->Name);
-
-                CreateImage(renderer,path, (Vector2){100,100}, (Vector2){50,50}, &actual->icon);
-
-                printf("Looped production on %s(%d:%d):%s ended\n",actual->name,actual->coordinates.x,actual->coordinates.y,product->Name);
-                done = true;
-            }
-
-            if(!done && plist.l[i].type == Building && plist.l[i].t <= now/1000)
-            {
-                int id = 0;
-
-                for(int k = 0; k<BuildItemCount+1; k++)
+                if(plist.l[i].type == Plant)
                 {
-                    if(Buildings[k].ID == plist.l[i].misc)
+                    plist.l[i].done = true;
+                    printf("End production...\n");
+
+                    ShopItem *shopItem = GetShopItemById(plist.l[i].misc, PlantingData.ItemCount,PlantingData.Items);
+
+                    Item *product = GetItemByName(shopItem->name, ItemCount,AllItem);
+
+                    char path[100];
+
+                    if(strcmp(actual->name, "Greenhouse") != 0)
                     {
-                        id = k;
+                        sprintf(path,"Images/Plants/%s/%s4.png",shopItem->name,shopItem->name);
+
+                        Vector2 pos = {actual->img.destination.x,actual->img.destination.y};
+                        CreateImage(renderer, path,pos,(Vector2){d_baseSize,d_baseSize}, &actual->additionalImage);
+                    }
+
+                    sprintf(path,"Images/Icons/%s.png",product->Name);
+
+                    CreateImage(renderer,path, (Vector2){100,100}, (Vector2){50,50}, &actual->icon);
+
+                    printf("Production on %s(%d:%d):%s ended\n",actual->name,actual->coordinates.x,actual->coordinates.y,shopItem->name);
+                }
+                else if(plist.l[i].type == Building)
+                {
+                    int id = 0;
+
+                    for(int k = 0; k<BuildingData.ItemCount+1; k++)
+                    {
+                        if(BuildingData.Items[k].ID == plist.l[i].misc)
+                        {
+                            id = k;
+                        }
+                    }
+
+                    char path[100];
+                    sprintf(path, "Images/%s.png",BuildingData.Items[id].name);
+                    Vector2 position = {actual->img.destination.x,actual->img.destination.y};
+                    strcpy(actual->name,BuildingData.Items[id].name);
+                    CreateImage(renderer,path, position,(Vector2){d_baseSize,d_baseSize}, &actual->img);
+                    SetSave(plist.l[i].TileID,plist.l[i].misc,0);
+
+                    printf("Building of %s (%d) is done\n",BuildingData.Items[id].name,BuildingData.Items[id].ID);
+
+                    Tile *tile = GetTileByID(&matrix, plist.l[i].TileID);
+
+                    tile->process = NULL;
+
+                    RemoveProcess(&plist, plist.l[i].ProcessID);
+
+                    //Ha mÈhkas Èp¸lt meg akkor elindÌtja automatikusan benne a termelÈst
+                    if(strcmp(BuildingData.Items[id].name, "Beehive") == 0)
+                    {
+                        Process p = {tile->id,Loop,tile->id,timer/1000+600,6};
+                        tile->process = AddProcess(&plist, p);
+
+
+                        unsigned long long int misc = timer/1000+600;
+                        misc <<= 8;
+                        misc += 6;
+
+                        SetSave(tile->id, 22,misc);
+                        printf("Honey production started\n");
                     }
                 }
-
-                char path[100];
-                sprintf(path, "Images/%s.png",Buildings[id].name);
-                Vector2 position = {actual->img.destination.x,actual->img.destination.y};
-                strcpy(actual->name,Buildings[id].name);
-                CreateImage(renderer,path, position,(Vector2){d_baseSize,d_baseSize}, &actual->img);
-                SetSave(plist.l[i].TileID,plist.l[i].misc,0);
-
-                printf("Building of %s (%d) is done\n",Buildings[id].name,Buildings[id].ID);
-
-                Tile *tile = GetTileByID(&matrix, plist.l[i].TileID);
-
-                tile->process = NULL;
-
-                RemoveProcess(&plist, plist.l[i].ProcessID);
-
-                //Ha m√©hkas √©p√ºlt meg akkor elind√≠tja automatikusan benne a termel√©st
-                if(strcmp(Buildings[id].name, "Beehive") == 0)
+                else if(plist.l[i].type == Craft)
                 {
-                    Process p = {tile->id,Loop,tile->id,timer/1000+beehiveTime,6};
-                    tile->process = AddProcess(&plist, p);
+                    Recipe *recipe = &Recipes[plist.l[i].misc];
+                    Item *finalItem = &AllItem[recipe->resultId];
+                    printf("Crafting process done (%s)!\n", finalItem->Name);
+                    AllItem[recipe->resultId].Amount += recipe->resultAmount;
 
+                    Crafter *actualCrafter = NULL;
+                    int crafterID = NULL;
 
-                    unsigned long long int misc = timer/1000+beehiveTime;
-                    misc <<= 8;
-                    misc += 6;
-
-                    SetSave(tile->id, 22,misc);
-                    printf("Honey production started\n");
-                }
-
-                done = true;
-
-            }
-
-            if(!done && plist.l[i].type == Craft && plist.l[i].t <= now/1000)
-            {
-                Recipe *recipe = &Recipes[plist.l[i].misc];
-                Item *finalItem = &AllItem[recipe->resultId];
-                printf("Crafting process done (%s)!\n", finalItem->Name);
-                AllItem[recipe->resultId].Amount += recipe->resultAmount;
-
-                Crafter *actualCrafter = NULL;
-
-                for(int x = 0; x<3 && actualCrafter == NULL; x++)
-                {
-                    if(plist.l[i].TileID == crafters[x].base->id)
+                    for(int x = 0; x<3 && actualCrafter == NULL; x++)
                     {
-                        actualCrafter = &crafters[x];
+                        if(plist.l[i].TileID == crafters[x].base->id)
+                        {
+                            actualCrafter = &crafters[x];
+                            crafterID = x;
+                        }
                     }
+                    printf("\to Crafter: %s\n",actualCrafter->name);
+                    int slotId = (plist.l[i].ProcessID/plist.l[i].TileID)-1;
+                    printf("\to Crafter slot id: %d\n",slotId);
+
+                    actualCrafter ->ProcessIds[slotId] = NULL;
+
+                    RemoveProcess(&plist, plist.l[i].ProcessID);
+
+                    int modId = d_mapSize+(crafterID*3)+slotId;
+
+                    SetSave(modId, 0, 0);
                 }
-                printf("\to Crafter: %s\n",actualCrafter->name);
-                int slotId = (plist.l[i].ProcessID/plist.l[i].TileID)-1;
-                printf("\to Crafter slot id: %d\n",slotId);
+                else if(plist.l[i].type == Loop)
+                {
+                    plist.l[i].done = true;
 
-                actualCrafter ->ProcessIds[slotId] = NULL;
+                    Item *product = &AllItem[plist.l[i].misc];
 
-                RemoveProcess(&plist, plist.l[i].ProcessID);
+                    char path[100];
+                    sprintf(path,"Images/Icons/%s.png",product->Name);
 
-                done = true;
+                    CreateImage(renderer,path, (Vector2){100,100}, (Vector2){50,50}, &actual->icon);
+
+                    printf("Looped production on %s(%d:%d):%s ended\n",actual->name,actual->coordinates.x,actual->coordinates.y,product->Name);
+                }
             }
 
         }
 
 
-        //Kiv√°lasztott csempe adatainak megjelen√≠t√©se
+        //Kiv·lasztott csempe adatainak megjelenÌtÈse
         Tile *select = GetTileByID(&matrix, SelectedTileId);
         Process *selectedProcess = GetProcess(&plist,SelectedTileId);
         char infos[100];
@@ -856,25 +877,54 @@ int main(int argc, char *argv[])
             int timeLeft = (selectedProcess->t-(timer/1000));
             char formattedTime[30];
             FormatTime(timeLeft*1000, formattedTime);
-            sprintf(infos,"%s (%s)",select->name,formattedTime);
+
+
+            if(selectedProcess->type == Plant)
+            {
+                for(int i = 0; i<PlantingData.ItemCount; i++)
+                {
+                    if(PlantingData.Items[i].ID == selectedProcess->misc)
+                        sprintf(infos,"%s (%s)",PlantingData.Items[i].name,formattedTime);
+                }
+            }
+            else if(selectedProcess->type == Building)
+            {
+                for(int i = 0; i<BuildingData.ItemCount; i++)
+                {
+                    if(BuildingData.Items[i].ID == selectedProcess->misc)
+                        sprintf(infos,"%s (%s)",BuildingData.Items[i].name,formattedTime);
+                }
+            }
+            else if(strcmp(select->name,"Beehive") == 0)
+            {
+                sprintf(infos,"Honey (%s)",formattedTime);
+            }
+            else
+                sprintf(infos,"%s (%s)",select->name,formattedTime);
         }
         else
         {
             sprintf(infos,"%s",select->name);
             selectInfo.childCount = 1;
         }
-        SDL_DestroyTexture(selectInfo.children[0].texture);
-        CreateText(infos, (Color){80,52,30}, 30, (Vector2){30,30}, renderer, font, &selectInfo.children[0]);
 
-        SetParentAlpha(&selectInfo, SelectInfoAlpha);
 
         if(SelectInfoAlpha > 1)
+        {
             SelectInfoAlpha-=delta_time/10;
+            SDL_DestroyTexture(selectInfo.children[0].texture);
+            int size = 30;
+            size = strlen(infos) > 15 ? 25:30;
+            CreateText(infos, (Color){80,52,30}, size, (Vector2){30,30}, renderer, font, &selectInfo.children[0]);
+        }
         else
             SelectInfoAlpha = 0;
 
 
-        //M√≥d jelz≈ë feliratok l√©trehoz√°sa
+        SetParentAlpha(&selectInfo, SelectInfoAlpha);
+
+
+        //MÛd jelzı feliratok lÈtrehoz·sa
         if(PlantMode && modeSign.texture == NULL)
         {
             CreateText("Planting...",(Color){150, 10, 0}, 50, (Vector2){d_windowSizeX/2-100, 30}, renderer,font,&modeSign);
@@ -891,7 +941,7 @@ int main(int argc, char *argv[])
 
         SDL_RenderClear(renderer);
 
-        //"Bark√°cs" men√ºk megjelen√≠t√©se
+        //"Bark·cs" men¸k megjelenÌtÈse
         for(int i = 0; i<3; i++)
         {
             if(crafters[i].opened)
@@ -902,7 +952,8 @@ int main(int argc, char *argv[])
                     if(crafters[i].ProcessIds[x] != NULL)
                     {
                         Process *proc = GetProcess(&plist, crafters[i].ProcessIds[x]);
-                        unsigned int timeLeft = (proc->t-(timer/1000));
+                        unsigned long long int timeLeft = (proc->t-(timer/1000));
+
                         char timetext[40];
                         FormatTime(timeLeft*1000,timetext);
                         SDL_DestroyTexture(crafters[i].menu.children[2+2*x].texture);
@@ -914,6 +965,7 @@ int main(int argc, char *argv[])
                         pos.x -= 40;
                         pos.y -= 15;
                         CreateImage(renderer,pathToIcon, pos, (Vector2){40,40}, &crafters[i].menu.children[2+2*x+1]);
+
                     }
                     else
                     {
@@ -925,19 +977,19 @@ int main(int argc, char *argv[])
             }
         }
 
-        //Pulz√°l√≥ k√©pek m√©ret√©nek kisz√°m√≠t√°sa
+        //Pulz·lÛ kÈpek mÈretÈnek kisz·mÌt·sa
         iconSize += delta_time*0.05*(grow?1:-1);
 
         if((grow && iconSize > 50) || (!grow && iconSize < 30))
             grow = !grow;
 
-        //T√©rk√©p elemek √©s a csemp√©khez tartoz√≥ ikonok √©s k√©pek megjelen√≠t√©se
+        //TÈrkÈp elemek Ès a csempÈkhez tartozÛ ikonok Ès kÈpek megjelenÌtÈse
 
         for(int x = 0; x<matrix.xSize;x++)
         {
             for(int y = 0; y<matrix.ySize;y++)
             {
-                if(LastTile -> id == matrix.matrix[x][y].id)
+                if(LastTile != NULL && LastTile -> id == matrix.matrix[x][y].id)
                     SDL_SetTextureColorMod(matrix.matrix[x][y].img.texture,220,220,220);
                 else
                     SDL_SetTextureColorMod(matrix.matrix[x][y].img.texture,255,255,255);
@@ -970,9 +1022,12 @@ int main(int argc, char *argv[])
                 }
                 else if(matrix.matrix[x][y].icon.texture == NULL)
                 {
-                    bool build =BuildMode && strcmp(matrix.matrix[x][y].name, "Ground") == 0 && Buildings[actualBuildItem].ID != 10;
+                    bool build =BuildMode && strcmp(matrix.matrix[x][y].name, "Ground") == 0 && BuildingData.Items[BuildingData.actualItem].ID != 10;
                     bool plant = PlantMode && matrix.matrix[x][y].process == NULL && (strcmp(matrix.matrix[x][y].name, "Greenhouse") == 0 || strcmp(matrix.matrix[x][y].name, "Field") == 0);
-                    bool destroy = BuildMode && Buildings[actualBuildItem].ID == 10;
+                    bool destroy = BuildMode && BuildingData.Items[BuildingData.actualItem].ID == 10;
+
+
+                    char *Undestroyables[6] = {"Windmill","Bakery","Brewery","Shop","Warehouse","Ground"};
 
                     for(int i = 0; i<6; i++)
                     {
@@ -991,7 +1046,7 @@ int main(int argc, char *argv[])
             }
         }
 
-        //Rakt√°r √©p√ºlet megjelen√≠t√©se ha meg van nyitva
+        //Rakt·r Èp¸let megjelenÌtÈse ha meg van nyitva
         if(canvas.warehousePanel.visible)
         {
             RenderParent(renderer, canvas.warehousePanel);
@@ -1001,24 +1056,24 @@ int main(int argc, char *argv[])
 
         RenderCanvas(&canvas, renderer);
 
-        //Szint l√©pt√©k√©nek kisz√°mol√°sa
-        canvas.levelProgression.destination.w = 215.0*(double)remainXP/nextLimit;
+        //Szint lÈptÈkÈnek kisz·mol·sa
+
         SDL_RenderCopy(renderer, canvas.levelProgression.texture, NULL, &canvas.levelProgression.destination);
 
 
-        //M√≥d jelz≈ë megjelen√≠t√©se
+        //MÛd jelzı megjelenÌtÈse
         if(modeSign.texture != NULL)
             SDL_RenderCopy(renderer, modeSign.texture, NULL, &modeSign.destination);
 
 
         SDL_RenderCopy(renderer, canvas.levelText.texture, NULL, &canvas.levelText.destination);
 
-        //Az √©p√≠t≈ë-√©s √ºltet≈ë men√º anim√°lt megjelen√≠t√©se
-        ShowAnimatedGUI(renderer, &canvas.buildPanel, d_windowSizeY, Buildings, BuildChildCount,money,level);
-        ShowAnimatedGUI(renderer, &canvas.plantPanel, d_windowSizeY, Plants, PlantChildCount,money,level);
+        //Az ÈpÌtı-Ès ¸ltetı men¸ anim·lt megjelenÌtÈse
+        ShowAnimatedGUI(renderer, &canvas.buildPanel, d_windowSizeY, BuildingData.Items, BuildingData.ChildCount,money,level);
+        ShowAnimatedGUI(renderer, &canvas.plantPanel, d_windowSizeY, PlantingData.Items, PlantingData.ChildCount,money,level);
 
 
-        //Rombol√≥ gomb k√ºl√∂n ker√ºl megjelen√≠t√©sre mivel ez nem hasonl√≠t az √ºltet≈ë panel elemeihez √≠gy nem szabv√°nyos
+        //RombolÛ gomb k¸lˆn ker¸l megjelenÌtÈsre mivel ez nem hasonlÌt az ¸ltetı panel elemeihez Ìgy nem szabv·nyos
         SDL_RenderCopy(renderer, canvas.buildPanel.children[canvas.buildPanel.childCount-1].texture,NULL,&canvas.buildPanel.children[canvas.buildPanel.childCount-1].destination);
 
         for(int i = 0; i<3; i++)
@@ -1028,16 +1083,16 @@ int main(int argc, char *argv[])
         SDL_RenderPresent(renderer);
     }
 
-    //Dinamikus t√∂mb felszabad√≠t√°sa
+    //Dinamikus tˆmb felszabadÌt·sa
     free(plist.l);
     FreeMatrix(&matrix);
 
-    //Adatok ment√©se
+    //Adatok mentÈse
     SaveStats(xp, money, ((int)timer/1000));
     SaveInventory(AllItem, ItemCount);
     printf("Saving...\n");
 
-    //Fennmarad√≥ dolgok bez√°r√°sa
+    //FennmaradÛ dolgok bez·r·sa
     TTF_CloseFont(font);
     SDL_Quit();
     IMG_Quit();
@@ -1045,15 +1100,9 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-
-bool LeftMouseDown;
-
 void OnLeftMouseDown(SDL_Event e)
 {
-    LeftMouseDown = true;
-    lastMousePos = (Vector2){e.motion.x,e.motion.y};
-
-    for(int x = 0; x<matrix.xSize && LeftMouseDown;x++)
+    for(int x = 0; x<matrix.xSize;x++)
     {
         for(int y = 0; y<matrix.ySize;y++)
         {
@@ -1061,39 +1110,29 @@ void OnLeftMouseDown(SDL_Event e)
         }
     }
 
-    SDL_SetTextureColorMod(LastTile -> img.texture,200,200,200);
+    if(LastTile != NULL)
+        SDL_SetTextureColorMod(LastTile -> img.texture,200,200,200);
 }
 
-
-void OnLeftMouseUp(SDL_Event e,Canvas *canvas, Item *AllItem, int ItemCount, int* SelectedTileId, int* SelectInfoAlpha, int* ids)
+void OnLeftMouseUp(SDL_Event e,Canvas *canvas, Item *AllItem, int ItemCount, int* ids, ShopData* plantData, ShopData* buildData, Crafter *crafters, bool *BuildMode, bool *PlantMode, ArrayData *recipeData, ArrayData *invData)
 {
-    LeftMouseDown = false;
+    LastTile = GetTileFromPosition(&matrix, (Vector2){e.motion.x,e.motion.y});
 
-    //Kisz√°m√≠tjuk az eg√©rrel megtett √∫t hossz√°t, hogy meg√°llap√≠tsuk, hogy click volt-e vagy vonszol√°s
-    double moved = sqrt(pow(lastMousePos.x-e.motion.x,2)+pow(lastMousePos.y-e.motion.y,2));
+    bool clicked = false;
 
-    if(moved < 10)
+    Recipe *Recipes = recipeData->arr;
+    int RecipeCount = recipeData->n;
+
+    //Bark·cs folyamatok elindÌt·sa
+
+    if(OverUI((Vector2){e.motion.x,e.motion.y},  crafters[0].menu.panelImage.destination))
     {
-        LastTile = GetTileFromPosition(&matrix, (Vector2){e.motion.x,e.motion.y});
-        if(LastTile != NULL)
-        {
-            SDL_SetTextureColorMod(LastTile -> img.texture,220,220,220);
-            printf("[%d](%d:%d) - %s\n",LastTile -> id,LastTile -> coordinates.x, LastTile -> coordinates.y, LastTile -> name);
-        }
-
-        bool clicked = false;
-
-        *SelectedTileId = LastTile ->id;
-        *SelectInfoAlpha = 255;
-
-
-        //Bark√°cs folyamatok elind√≠t√°sa
         int indexToItem = 0;
         RecipeType recipeType;
         int crafterID = 0;
         for(int i = 0; i<3; i++)
         {
-            if(crafters[i].opened && OverUI((Vector2){e.motion.x,e.motion.y},  crafters[i].menu.panelImage.destination))
+            if(crafters[i].opened)
             {
                 printf("Clicked on %s panel\n", crafters[i].name);
                 crafterID = i;
@@ -1149,6 +1188,7 @@ void OnLeftMouseUp(SDL_Event e,Canvas *canvas, Item *AllItem, int ItemCount, int
             if(!finded)
             {
                 printf("No more slot\n");
+                return;
             }
 
             AllItem[toMake->itemIds[0]].Amount -= toMake->itemAmounts[0];
@@ -1176,21 +1216,27 @@ void OnLeftMouseUp(SDL_Event e,Canvas *canvas, Item *AllItem, int ItemCount, int
             SetSave(modId, 125+crafterID, misc);
 
             printf("Crafting added: ID: %d; Type: %d; TileID: %d; Time: %d; Misc.: %d; Done: %s\n", process.ProcessID,process.type,process.TileID,process.t, process.misc,process.done ? "True":"False");
+
+            return;
         }
+    }
 
-        //√âp√≠tkez√©s men√º elemeinek kiv√°laszt√°sa
-        for(int i =2; i<canvas->buildPanel.childCount && !clicked; i+= BuildChildCount)
+    //…pÌtkezÈs men¸ elemeinek kiv·laszt·sa
+
+    if(canvas->buildPanel.visible && OverUI((Vector2){e.motion.x, e.motion.y}, canvas->buildPanel.panelImage.destination))
+    {
+        for(int i =2; i<canvas->buildPanel.childCount; i+= buildData->ChildCount)
         {
-            if(OverUI((Vector2){e.motion.x, e.motion.y}, canvas->buildPanel.children[i].destination) && canvas->buildPanel.visible)
+            if(OverUI((Vector2){e.motion.x, e.motion.y}, canvas->buildPanel.children[i].destination))
             {
-                if(Buildings[(i-2)/BuildChildCount].price <= money && Buildings[(i-2)/BuildChildCount].level <= level)
+                if(buildData->Items[(i-2)/buildData->ChildCount].price <= money && buildData->Items[(i-2)/buildData->ChildCount].level <= level)
                 {
-                    BuildMode = !BuildMode;
+                    *BuildMode = !*BuildMode;
 
-                    if(BuildMode)
+                    if(*BuildMode)
                     {
-                        actualBuildItem = (i-2)/6;
-                        printf("Building selected: %s\n",Buildings[actualBuildItem].name);
+                        buildData->actualItem = (i-2)/6;
+                        printf("Building selected: %s\n",buildData->Items[buildData->actualItem].name);
                     }
                     else
                     {
@@ -1201,24 +1247,37 @@ void OnLeftMouseUp(SDL_Event e,Canvas *canvas, Item *AllItem, int ItemCount, int
                 }
                 else
                 {
-                    BuildMode = false;
+                    *BuildMode = false;
                 }
             }
         }
 
-        //√últet√©s men√º elemeinek kiv√°laszt√°sa
-        for(int i =2; i<canvas->plantPanel.childCount && !clicked; i+= PlantChildCount)
-        {
-            if(OverUI((Vector2){e.motion.x, e.motion.y}, canvas->plantPanel.children[i].destination) && canvas->plantPanel.visible)
-            {
-                if(Plants[(i-2)/PlantChildCount].price <= money && Plants[(i-2)/PlantChildCount].level <= level)
-                {
-                    PlantMode = !PlantMode;
 
-                    if(PlantMode)
+        if(canvas->buildPanel.visible && OverUI((Vector2){e.motion.x,e.motion.y},  canvas->buildPanel.children[0].destination))
+        {
+            canvas->buildPanel.visible = false;
+            *BuildMode = false;
+        }
+
+        return;
+    }
+
+
+    //‹ltetÈs men¸ elemeinek kiv·laszt·sa
+    if(canvas->plantPanel.visible && OverUI((Vector2){e.motion.x, e.motion.y}, canvas->plantPanel.panelImage.destination))
+    {
+        for(int i =2; i<canvas->plantPanel.childCount; i+= plantData->ChildCount)
+        {
+            if(OverUI((Vector2){e.motion.x, e.motion.y}, canvas->plantPanel.children[i].destination))
+            {
+                if(plantData->Items[(i-2)/plantData->ChildCount].price <= money && plantData->Items[(i-2)/plantData->ChildCount].level <= level)
+                {
+                    *PlantMode = !*PlantMode;
+
+                    if(*PlantMode)
                     {
-                        actualPlantItem = (i-2)/6;
-                        printf("Plant selected(%d): %s\n",actualPlantItem, Plants[actualPlantItem].name);
+                        plantData->actualItem = (i-2)/6;
+                        printf("Plant selected(%d): %s\n",plantData->actualItem, plantData->Items[plantData->actualItem].name);
                     }
                     else
                     {
@@ -1229,195 +1288,214 @@ void OnLeftMouseUp(SDL_Event e,Canvas *canvas, Item *AllItem, int ItemCount, int
                 }
                 else
                 {
-                    BuildMode = false;
+                    *BuildMode = false;
                 }
             }
         }
 
-        if(clicked)
-            return;
-
-        //"Bark√°cs" men√ºk megnyit√°sa/bez√°r√°sa
-        bool opened = false;
-        for(int i = 0; i<3 && !canvas->warehousePanel.visible && !BuildMode && !PlantMode; i++)
-            if(crafters[i].opened)
-                opened = true;
-
-
-        for(int i = 0; i<3; i++)
-        {
-            if(OverUI((Vector2){e.motion.x,e.motion.y}, crafters[i].menu.children[0].destination) && crafters[i].opened)
-            {
-                crafters[i].opened = false;
-            }
-            else if(strcmp(LastTile -> name, crafters[i].name) == 0 && !crafters[i].opened && !opened && !canvas->warehousePanel.visible && !BuildMode && !PlantMode)
-            {
-                crafters[i].opened = true;
-                LastTile = &matrix.matrix[0][0];
-
-                canvas->plantPanel.visible = false;
-                canvas->buildPanel.visible = false;
-                BuildMode = false;
-            }
-        }
-
-        if(strcmp(LastTile->name, "Warehouse") == 0)
-        {
-            canvas->warehousePanel.visible = true;
-            OpenWarehouse(canvas, renderer, AllItem, ItemCount, font,ids);
-        }
-
-        if(canvas->warehousePanel.visible && OverUI((Vector2){e.motion.x,e.motion.y},  canvas->warehousePanel.panelImage.destination))
-        {
-            if(OverUI((Vector2){e.motion.x,e.motion.y},  canvas->warehousePanel.children[0].destination))
-            {
-                canvas->warehousePanel.visible = false;
-            }
-
-            int index = 0;
-            for(int i = 5; i<canvas->warehousePanel.childCount && !clicked; i+=5)
-            {
-                if(OverUI((Vector2){e.motion.x,e.motion.y},  canvas->warehousePanel.children[i].destination))
-                {
-                    clicked = true;
-                    AllItem[ids[index]].Amount--;
-
-                    AddMoney(AllItem[ids[index]].Price, &canvas->moneyText);
-                    OpenWarehouse(canvas, renderer, AllItem, ItemCount, font,ids);
-                }
-                index++;
-            }
-        }
-
-        if(OverUI((Vector2){e.motion.x,e.motion.y},  canvas->buildPanel.children[0].destination) && canvas->buildPanel.visible)
-        {
-            canvas->buildPanel.visible = false;
-            BuildMode = false;
-        }
-        if(OverUI((Vector2){e.motion.x,e.motion.y},  canvas->plantPanel.children[0].destination) && canvas->plantPanel.visible)
+        if(canvas->plantPanel.visible && OverUI((Vector2){e.motion.x,e.motion.y},  canvas->plantPanel.children[0].destination))
         {
             canvas->plantPanel.visible = false;
-            PlantMode = false;
+            *PlantMode = false;
         }
 
-        if(OverUI((Vector2){e.motion.x,e.motion.y},  canvas->buildButton.destination) && !canvas->buildPanel.visible)
+        return;
+    }
+
+
+    if(LastTile != NULL)
+    {
+        SDL_SetTextureColorMod(LastTile -> img.texture,220,220,220);
+        printf("[%d](%d:%d) - %s\n",LastTile -> id,LastTile -> coordinates.x, LastTile -> coordinates.y, LastTile -> name);
+    }
+    else
+    {
+        printf("\n\n\tLast tile is NULL\n\n\n");
+        return;
+    }
+
+    //"Bark·cs" men¸k megnyit·sa/bez·r·sa
+    bool opened = false;
+    for(int i = 0; i<3 && !canvas->warehousePanel.visible && !*BuildMode && !*PlantMode; i++)
+        if(crafters[i].opened)
+            opened = true;
+
+
+    for(int i = 0; i<3; i++)
+    {
+        if(OverUI((Vector2){e.motion.x,e.motion.y}, crafters[i].menu.children[0].destination) && crafters[i].opened)
         {
-            canvas->buildPanel.visible = true;
+            crafters[i].opened = false;
         }
-        if(OverUI((Vector2){e.motion.x,e.motion.y},  canvas->plantButton.destination) && !canvas->plantPanel.visible)
+        else if(strcmp(LastTile -> name, crafters[i].name) == 0 && !crafters[i].opened && !opened && !canvas->warehousePanel.visible && !*BuildMode && !*PlantMode)
         {
-            canvas->plantPanel.visible = true;
-        }
+            crafters[i].opened = true;
+            LastTile = &matrix.matrix[0][0];
 
-        if(BuildMode && (strcmp(LastTile -> name, "Ground") == 0 || strcmp(Buildings[actualBuildItem].name, "Ground") == 0))
-        {
-
-            AddMoney(-Buildings[actualBuildItem].price, &canvas->moneyText);
-
-            unsigned int id = LastTile->id;
-            unsigned long long int t = (timer/1000)+Buildings[actualBuildItem].time;
-
-            Process p = {id,Building,id,t,Buildings[actualBuildItem].ID};
-            LastTile->process = AddProcess(&plist,p);
-
-            Vector2 position = {LastTile->img.destination.x,LastTile->img.destination.y};
-
-            CreateImage(renderer,"Images/ConstructionSite.png", position,(Vector2){d_baseSize,d_baseSize}, &LastTile->img);
-            strcpy(LastTile->name,"ConstructionSite");
-
-
-            BuildMode = false;
-
-
-            unsigned long long int misc = t;
-            misc <<= 8;
-            misc += Buildings[actualBuildItem].ID;
-
-            SetSave(id,1,misc);
-
-            printf("%s(%d) building started (%d sec)\n",Buildings[actualBuildItem].name,Buildings[actualBuildItem].ID,Buildings[actualBuildItem].time);
-        }
-
-        if(PlantMode && (strcmp(LastTile -> name, "Field") == 0 || strcmp(LastTile -> name, "Greenhouse") == 0) && LastTile->process == NULL)
-        {
-            bool greenhouse = strcmp(LastTile->name,"Greenhouse") == 0;
-            AddMoney(-Plants[actualPlantItem].price, &canvas->moneyText);
-
-            unsigned int id = LastTile->id;
-            unsigned long long int t = (timer/1000)+(Plants[actualPlantItem].time/(greenhouse?3:1));
-
-            Process p = {id,Plant,id,t,Plants[actualPlantItem].ID};
-            LastTile->process = AddProcess(&plist,p);
-
-            unsigned long long int misc = t;
-            misc <<= 8;
-            misc += Plants[actualPlantItem].ID;
-
-            SetSave(id,strcmp(LastTile->name,"Field") == 0 ? 21:23,misc);
-
-            if(Plants[actualPlantItem].price > money)
-                PlantMode = false;
-
-            printf("%s placed on field (%d:%d)\n",Plants[actualPlantItem].name, LastTile ->coordinates.x, LastTile ->coordinates.y);
-        }
-
-        Process *selectedProcess = GetProcess(&plist, LastTile->id);
-        if(selectedProcess != NULL && selectedProcess->t < timer/1000)
-        {
-            Item *item;
-            Tile *actual = GetTileByID(&matrix, selectedProcess->TileID);
-            if(selectedProcess->type == Plant)
-            {
-                ShopItem *plant = GetShopItemById(selectedProcess->misc,PlantItemCount, Plants);
-                printf("Product (%s) is done\n",plant->name);
-                item = GetItemByName(plant->name, ItemCount, AllItem);
-                item->Amount++;
-
-                SetSave(selectedProcess->TileID, strcmp(LastTile->name,"Field") == 0 ? 21:23,0);
-
-                RemoveProcess(&plist,selectedProcess->ProcessID);
-                LastTile->process = NULL;
-            }
-            else if(selectedProcess->type == Loop)
-            {
-                item = &AllItem[selectedProcess->misc];
-                item->Amount++;
-                printf("Product (%s) is done\n",item->Name);
-                RemoveProcess(&plist,selectedProcess->ProcessID);
-
-                long long int timeToDone = timer/1000+beehiveTime;
-
-                printf("Beehive looped production started (%d)\n",timeToDone);
-                Process p = {actual ->id,Loop,actual ->id,timeToDone,6};
-                actual -> process = AddProcess(&plist, p);
-
-
-                unsigned long long int misc = timeToDone;
-                misc <<= 8;
-                misc += 6;
-
-                SetSave(actual->id, 22,misc);
-            }
-
-            actual->additionalImage.texture = NULL;
-            actual->icon.texture = NULL;
-
-
-            AddXP(item->Price, &canvas->levelText);
+            canvas->plantPanel.visible = false;
+            canvas->buildPanel.visible = false;
+            *BuildMode = false;
         }
     }
+
+    if(strcmp(LastTile->name, "Warehouse") == 0)
+    {
+        canvas->warehousePanel.visible = true;
+        OpenWarehouse(canvas, renderer, invData, font,ids);
+    }
+
+    if(canvas->warehousePanel.visible && OverUI((Vector2){e.motion.x,e.motion.y},  canvas->warehousePanel.panelImage.destination))
+    {
+        if(OverUI((Vector2){e.motion.x,e.motion.y},  canvas->warehousePanel.children[0].destination))
+        {
+            canvas->warehousePanel.visible = false;
+        }
+
+        int index = 0;
+        for(int i = 5; i<canvas->warehousePanel.childCount && !clicked; i+=5)
+        {
+            if(OverUI((Vector2){e.motion.x,e.motion.y},  canvas->warehousePanel.children[i].destination))
+            {
+                clicked = true;
+                AllItem[ids[index]].Amount--;
+
+                AddMoney(AllItem[ids[index]].Price, &canvas->moneyText);
+                OpenWarehouse(canvas, renderer, invData, font,ids);
+            }
+            index++;
+        }
+    }
+
+
+    if(!canvas->buildPanel.visible && OverUI((Vector2){e.motion.x,e.motion.y},  canvas->buildButton.destination))
+    {
+        canvas->buildPanel.visible = true;
+    }
+    if(!canvas->plantPanel.visible && OverUI((Vector2){e.motion.x,e.motion.y},  canvas->plantButton.destination))
+    {
+        canvas->plantPanel.visible = true;
+    }
+
+    if(*BuildMode && (strcmp(LastTile -> name, "Ground") == 0 || strcmp(buildData->Items[buildData->actualItem].name, "Ground") == 0))
+    {
+        char *Undestroyables[6] = {"Windmill","Bakery","Brewery","Shop","Warehouse","Ground"};
+
+        for(int i = 0; i<6 && strcmp(buildData->Items[buildData->actualItem].name, "Ground") == 0;i++)
+        {
+            if(strcmp(LastTile->name, Undestroyables[i]) == 0)
+                return;
+        }
+
+        AddMoney(-buildData->Items[buildData->actualItem].price, &canvas->moneyText);
+
+        unsigned int id = LastTile->id;
+        unsigned long long int t = (timer/1000)+buildData->Items[buildData->actualItem].time;
+
+        Process p = {id,Building,id,t,buildData->Items[buildData->actualItem].ID};
+        LastTile->process = AddProcess(&plist,p);
+
+        Vector2 position = {LastTile->img.destination.x,LastTile->img.destination.y};
+
+        CreateImage(renderer,"Images/ConstructionSite.png", position,(Vector2){d_baseSize,d_baseSize}, &LastTile->img);
+        strcpy(LastTile->name,"ConstructionSite");
+
+
+        *BuildMode = false;
+
+
+        unsigned long long int misc = t;
+        misc <<= 8;
+        misc += buildData->Items[buildData->actualItem].ID;
+
+        SetSave(id,1,misc);
+
+        printf("%s(%d) building started (%d sec)\n",buildData->Items[buildData->actualItem].name,buildData->Items[buildData->actualItem].ID,buildData->Items[buildData->actualItem].time);
+    }
+
+    if(*PlantMode && (strcmp(LastTile -> name, "Field") == 0 || strcmp(LastTile -> name, "Greenhouse") == 0) && LastTile->process == NULL)
+    {
+        bool greenhouse = strcmp(LastTile->name,"Greenhouse") == 0;
+        AddMoney(-plantData->Items[plantData->actualItem].price, &canvas->moneyText);
+
+        unsigned int id = LastTile->id;
+        unsigned long long int t = (timer/1000)+(plantData->Items[plantData->actualItem].time/(greenhouse?3:1));
+
+        Process p = {id,Plant,id,t,plantData->Items[plantData->actualItem].ID};
+        LastTile->process = AddProcess(&plist,p);
+
+        unsigned long long int misc = t;
+        misc <<= 8;
+        misc += plantData->Items[plantData->actualItem].ID;
+
+        SetSave(id,strcmp(LastTile->name,"Field") == 0 ? 21:23,misc);
+
+        if(plantData->Items[plantData->actualItem].price > money)
+            *PlantMode = false;
+
+        printf("%s placed on field (%d:%d)\n",plantData->Items[plantData->actualItem].name, LastTile ->coordinates.x, LastTile ->coordinates.y);
+
+        return;
+    }
+
+    Process *selectedProcess = GetProcess(&plist, LastTile->id);
+    if(selectedProcess != NULL && selectedProcess->t < timer/1000)
+    {
+        Item *item;
+        Tile *actual = GetTileByID(&matrix, selectedProcess->TileID);
+        if(selectedProcess->type == Plant)
+        {
+            ShopItem *plant = GetShopItemById(selectedProcess->misc,plantData->ItemCount, plantData->Items);
+            printf("Product (%s) is done\n",plant->name);
+            item = GetItemByName(plant->name, ItemCount, AllItem);
+            item->Amount++;
+
+            SetSave(selectedProcess->TileID, strcmp(LastTile->name,"Field") == 0 ? 21:23,0);
+
+            RemoveProcess(&plist,selectedProcess->ProcessID);
+            LastTile->process = NULL;
+        }
+        else if(selectedProcess->type == Loop)
+        {
+            item = &AllItem[selectedProcess->misc];
+            item->Amount++;
+            printf("Product (%s) is done\n",item->Name);
+            RemoveProcess(&plist,selectedProcess->ProcessID);
+
+            long long int timeToDone = timer/1000+600;
+
+            printf("Beehive looped production started (%d)\n",timeToDone);
+            Process p = {actual ->id,Loop,actual ->id,timeToDone,6};
+            actual -> process = AddProcess(&plist, p);
+
+
+            unsigned long long int misc = timeToDone;
+            misc <<= 8;
+            misc += 6;
+
+            SetSave(actual->id, 22,misc);
+        }
+
+        actual->additionalImage.texture = NULL;
+        actual->icon.texture = NULL;
+
+
+        AddXP(item->Price, &canvas->levelText,&canvas->levelProgression);
+        return;
+    }
+
+
 }
 
-void OnMouseMove(SDL_Event e,Item *AllItem, int ItemCount)
+void OnMouseMove(SDL_Event e,Item *AllItem, int ItemCount, Crafter *crafters, bool LeftMouseDown)
 {
-    //Ha b√°rmilyen panel meg van nyitva akkor kil√©p
+    //Ha b·rmilyen panel meg van nyitva akkor kilÈp
 
     for(int i = 0; i<3 ; i++)
         if(crafters[i].opened)
             return;
 
 
-    //T√©rk√©p mozgat√°sa
+    //TÈrkÈp mozgat·sa
 
     for(int x = 0; x<matrix.xSize && LeftMouseDown;x++)
     {
@@ -1431,7 +1509,7 @@ void OnMouseMove(SDL_Event e,Item *AllItem, int ItemCount)
     }
 }
 
-//Az aktu√°lis n√∂v√©ny k√©p√©nek kisz√°mol√°sa a h√°tral√©v≈ë id≈ëb≈ël
+//Az aktu·lis nˆvÈny kÈpÈnek kisz·mol·sa a h·tralÈvı idıbıl
 int GetPlantImageId(ShopItem *plant, unsigned long long int TimeWhenDone)
 {
     unsigned long long TimeLeft = TimeWhenDone-(timer/1000);
@@ -1442,7 +1520,7 @@ int GetPlantImageId(ShopItem *plant, unsigned long long int TimeWhenDone)
     return (AllTime-TimeLeft)/PictureTime;
 }
 
-//Megkeresi azonos√≠t√≥ alapj√°n a t√°rgyat a t√∂mbben
+
 ShopItem* GetShopItemById(int id, int n, ShopItem *itemList)
 {
     for(int i = 0; i<n; i++)
@@ -1453,35 +1531,26 @@ ShopItem* GetShopItemById(int id, int n, ShopItem *itemList)
     return NULL;
 }
 
-Item* GetItemByName(char *name, int n, Item *itemList)
-{
-    for(int i = 0; i<n;i++)
-    {
-        if(strcmp(name, itemList[i].Name) == 0)
-            return &itemList[i];
-    }
-
-    return NULL;
-}
-
-
 void AddMoney(int amount, Image *moneyText)
 {
     money += amount;
     char intToString[20];
 
     sprintf(intToString, "$%d", money);
-    SDL_DestroyTexture(moneyText->texture);
+
+    if(moneyText->texture != NULL)
+        SDL_DestroyTexture(moneyText->texture);
+
     CreateText(intToString, (Color){80,52,30}, 50, (Vector2){880,23}, renderer, font, moneyText);
 }
 
-void AddXP(int amount, Image *levelText)
+void AddXP(int amount, Image *levelText, Image *levelProg)
 {
     printf("Added xp\n");
     xp+=amount;
     printf("All xp=%d\n",xp);
-    nextLimit = 10;
-    remainXP = xp;
+    int nextLimit = 10;
+    int remainXP = xp;
 
     for(level = 1; remainXP >= nextLimit; level++)
     {
@@ -1491,6 +1560,10 @@ void AddXP(int amount, Image *levelText)
 
     char intToString[20];
     sprintf(intToString, "Level %d", level);
-    SDL_DestroyTexture(levelText->texture);
+
+    if(levelText->texture != NULL)
+        SDL_DestroyTexture(levelText->texture);
+
+    levelProg -> destination.w = 215.0*(double)remainXP/nextLimit;
     CreateText(intToString, (Color){80,52,30}, 30, (Vector2){880,85}, renderer, font, levelText);
 }
